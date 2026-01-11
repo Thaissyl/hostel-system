@@ -1,0 +1,182 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Booking Requests - HostelVN</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Lexend:wght@300;400;500;600;700&family=Source+Sans+3:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+  <style>
+    body { font-family: 'Source Sans 3', sans-serif; }
+    h1, h2, h3, h4, h5, h6 { font-family: 'Lexend', sans-serif; }
+  </style>
+</head>
+<body class="bg-slate-50">
+  <div class="flex min-h-screen">
+    <!-- Sidebar -->
+    <aside class="hidden lg:flex lg:flex-col w-64 bg-slate-900 text-slate-300 flex-shrink-0">
+      <div class="p-6"><a href="#" class="text-2xl font-bold text-white">HostelVN</a></div>
+      <nav class="flex-1 px-4">
+        <a href="#" class="flex items-center gap-3 px-4 py-3 hover:bg-slate-800 rounded-lg font-medium cursor-pointer">Dashboard</a>
+        <a href="#" class="flex items-center gap-3 px-4 py-3 hover:bg-slate-800 rounded-lg font-medium cursor-pointer">My Listings</a>
+        <a href="#" class="flex items-center gap-3 px-4 py-3 hover:bg-slate-800 rounded-lg font-medium cursor-pointer">Calendar</a>
+        <a href="#" class="flex items-center gap-3 px-4 py-3 bg-slate-800 text-white rounded-lg font-medium cursor-pointer">Bookings</a>
+      </nav>
+    </aside>
+
+    <div class="flex-1 p-8">
+      <div class="mb-8">
+        <h1 class="text-2xl font-bold text-slate-900">Booking Requests</h1>
+        <p class="text-slate-500">Manage incoming booking requests</p>
+      </div>
+
+      <!-- Tabs -->
+      <div class="border-b border-slate-200 mb-6">
+        <nav class="flex gap-8">
+          <button class="pb-4 border-b-2 border-primary-500 text-primary-600 font-medium cursor-pointer">Pending (3)</button>
+          <button class="pb-4 border-b-2 border-transparent text-slate-500 hover:text-slate-700 font-medium cursor-pointer">Confirmed (12)</button>
+          <button class="pb-4 border-b-2 border-transparent text-slate-500 hover:text-slate-700 font-medium cursor-pointer">Completed (45)</button>
+          <button class="pb-4 border-b-2 border-transparent text-slate-500 hover:text-slate-700 font-medium cursor-pointer">Cancelled (3)</button>
+        </nav>
+      </div>
+
+      <!-- Booking Cards -->
+      <div class="space-y-4">
+        <!-- Pending Booking 1 -->
+        <div class="bg-white rounded-xl border border-slate-200 p-6">
+          <div class="flex flex-col lg:flex-row gap-6">
+            <div class="lg:w-48 flex-shrink-0">
+              <img src="https://images.unsplash.com/photo-1566073771259-6a8506099945?w=300" alt="Hostel" class="w-full h-32 object-cover rounded-lg">
+            </div>
+            <div class="flex-1">
+              <div class="flex flex-col lg:flex-row lg:items-start justify-between gap-4">
+                <div class="flex-1">
+                  <div class="flex items-center gap-3 mb-2">
+                    <h3 class="text-lg font-semibold text-slate-900">Saigon Backpackers Hostel</h3>
+                    <span class="px-2 py-1 bg-warning-100 text-warning-700 text-xs font-semibold rounded-full">Pending</span>
+                  </div>
+                  <div class="grid grid-cols-2 lg:grid-cols-4 gap-4 text-sm">
+                    <div>
+                      <p class="text-slate-500">Guest</p>
+                      <p class="font-medium text-slate-900">Sarah Miller</p>
+                    </div>
+                    <div>
+                      <p class="text-slate-500">Dates</p>
+                      <p class="font-medium text-slate-900">Feb 1-5, 2026</p>
+                    </div>
+                    <div>
+                      <p class="text-slate-500">Room</p>
+                      <p class="font-medium text-slate-900">Private Room</p>
+                    </div>
+                    <div>
+                      <p class="text-slate-500">Total</p>
+                      <p class="font-medium text-slate-900">$140</p>
+                    </div>
+                  </div>
+                  <div class="mt-4 p-3 bg-slate-50 rounded-lg text-sm">
+                    <p class="text-slate-600"><span class="font-medium">Special Request:</span> Arriving late around 10 PM. Please arrange late check-in.</p>
+                  </div>
+                </div>
+                <div class="flex lg:flex-col gap-3">
+                  <button class="px-6 py-2 bg-success-500 text-white font-medium rounded-lg hover:bg-success-600 cursor-pointer">Accept</button>
+                  <button class="px-6 py-2 border border-error-300 text-error-600 font-medium rounded-lg hover:bg-error-50 cursor-pointer">Decline</button>
+                  <button class="px-6 py-2 border border-slate-300 text-slate-700 font-medium rounded-lg hover:bg-slate-50 cursor-pointer">Message</button>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- Pending Booking 2 -->
+        <div class="bg-white rounded-xl border border-slate-200 p-6">
+          <div class="flex flex-col lg:flex-row gap-6">
+            <div class="lg:w-48 flex-shrink-0">
+              <img src="https://images.unsplash.com/photo-1584132967334-10e028bd69f7?w=300" alt="Hostel" class="w-full h-32 object-cover rounded-lg">
+            </div>
+            <div class="flex-1">
+              <div class="flex flex-col lg:flex-row lg:items-start justify-between gap-4">
+                <div class="flex-1">
+                  <div class="flex items-center gap-3 mb-2">
+                    <h3 class="text-lg font-semibold text-slate-900">Hanoi Old Quarter Hostel</h3>
+                    <span class="px-2 py-1 bg-warning-100 text-warning-700 text-xs font-semibold rounded-full">Pending</span>
+                  </div>
+                  <div class="grid grid-cols-2 lg:grid-cols-4 gap-4 text-sm">
+                    <div>
+                      <p class="text-slate-500">Guest</p>
+                      <p class="font-medium text-slate-900">Alex Kim</p>
+                    </div>
+                    <div>
+                      <p class="text-slate-500">Dates</p>
+                      <p class="font-medium text-slate-900">Feb 10-15, 2026</p>
+                    </div>
+                    <div>
+                      <p class="text-slate-500">Room</p>
+                      <p class="font-medium text-slate-900">Dorm Bed</p>
+                    </div>
+                    <div>
+                      <p class="text-slate-500">Total</p>
+                      <p class="font-medium text-slate-900">$60</p>
+                    </div>
+                  </div>
+                </div>
+                <div class="flex lg:flex-col gap-3">
+                  <button class="px-6 py-2 bg-success-500 text-white font-medium rounded-lg hover:bg-success-600 cursor-pointer">Accept</button>
+                  <button class="px-6 py-2 border border-error-300 text-error-600 font-medium rounded-lg hover:bg-error-50 cursor-pointer">Decline</button>
+                  <button class="px-6 py-2 border border-slate-300 text-slate-700 font-medium rounded-lg hover:bg-slate-50 cursor-pointer">Message</button>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- Pending Booking 3 -->
+        <div class="bg-white rounded-xl border border-slate-200 p-6">
+          <div class="flex flex-col lg:flex-row gap-6">
+            <div class="lg:w-48 flex-shrink-0">
+              <img src="https://images.unsplash.com/photo-1555854877-bab0e564b8d5?w=300" alt="Hostel" class="w-full h-32 object-cover rounded-lg">
+            </div>
+            <div class="flex-1">
+              <div class="flex flex-col lg:flex-row lg:items-start justify-between gap-4">
+                <div class="flex-1">
+                  <div class="flex items-center gap-3 mb-2">
+                    <h3 class="text-lg font-semibold text-slate-900">Da Nang Beach House</h3>
+                    <span class="px-2 py-1 bg-warning-100 text-warning-700 text-xs font-semibold rounded-full">Pending</span>
+                  </div>
+                  <div class="grid grid-cols-2 lg:grid-cols-4 gap-4 text-sm">
+                    <div>
+                      <p class="text-slate-500">Guest</p>
+                      <p class="font-medium text-slate-900">Michael Chen</p>
+                    </div>
+                    <div>
+                      <p class="text-slate-500">Dates</p>
+                      <p class="font-medium text-slate-900">Feb 20-25, 2026</p>
+                    </div>
+                    <div>
+                      <p class="text-slate-500">Room</p>
+                      <p class="font-medium text-slate-900">Dorm Bed</p>
+                    </div>
+                    <div>
+                      <p class="text-slate-500">Total</p>
+                      <p class="font-medium text-slate-900">$75</p>
+                    </div>
+                  </div>
+                  <div class="mt-4 p-3 bg-slate-50 rounded-lg text-sm">
+                    <p class="text-slate-600"><span class="font-medium">Special Request:</span> Need airport pickup on Feb 20. Flight VN123 arriving at 2 PM.</p>
+                  </div>
+                </div>
+                <div class="flex lg:flex-col gap-3">
+                  <button class="px-6 py-2 bg-success-500 text-white font-medium rounded-lg hover:bg-success-600 cursor-pointer">Accept</button>
+                  <button class="px-6 py-2 border border-error-300 text-error-600 font-medium rounded-lg hover:bg-error-50 cursor-pointer">Decline</button>
+                  <button class="px-6 py-2 border border-slate-300 text-slate-700 font-medium rounded-lg hover:bg-slate-50 cursor-pointer">Message</button>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+</body>
+</html>
