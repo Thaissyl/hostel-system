@@ -45,7 +45,7 @@
 
 ## Specification Format
 
-Each use case specification follows the COMET template format with black box compliance:
+Each use case specification follows the enhanced COMET template format with black box compliance:
 
 | Field | Description |
 |-------|-------------|
@@ -62,6 +62,10 @@ Each use case specification follows the COMET template format with black box com
 | Frequency of Use | High/Medium/Low |
 | Priority | High/Medium/Low |
 | Outstanding Questions | Unresolved items |
+| **Boundary Objects** | Data crossing system boundaries |
+| **Internal Software Objects** | Services, repositories, validators |
+| **Message Communication Sequence** | HTTP/WebSocket/RabbitMQ flows |
+| **Expanded Alternative Sequences** | Detailed error handling tables |
 
 ---
 

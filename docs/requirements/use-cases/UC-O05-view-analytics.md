@@ -41,3 +41,113 @@ flowchart LR
 ## Black Box Compliance
 
 ✅ **COMPLIANT** - All steps describe external interactions only.
+
+---
+
+## Boundary Objects
+
+| Boundary Object | Description | Data Elements |
+|----------------|-------------|---------------|
+| **AnalyticsDashboard** | Dashboard data | kpiCards[], chartData[], dateRange, filters |
+| **KPICard** | Single KPI display | metric, value, change, changeType (increase/decrease) |
+| **ChartData** | Chart data points | series[], labels[], type (line/bar/pie) |
+| **AnalyticsFilter** | Filter options | dateRange, listingIds, bookingStatus |
+| **ExportRequest** | Export request | format, dateRange, includedMetrics |
+
+---
+
+## Internal Software Objects
+
+| Internal Object | Responsibility |
+|-----------------|---------------|
+| **AnalyticsService** | Aggregates owner analytics |
+| **BookingAnalyticsService** | Calculates booking metrics |
+| **RevenueService** | Computes revenue data |
+| **OccupancyService** | Calculates occupancy rates |
+| **RatingService** | Aggregates review ratings |
+| **ExportService** | Generates PDF/CSV exports |
+| **AnalyticsRepository** | Queries analytics data |
+| **CacheService** | Caches aggregated data (1-hour TTL) |
+| **ScheduledReportService** | Manages automated reports |
+
+---
+
+## Message Communication Sequence
+
+### View Analytics Flow
+
+```
+Owner → System: ViewAnalytics (HTTP GET /api/owner/analytics)
+    ↓
+System → CacheService: Check cache
+    ← CacheMiss
+System → AnalyticsRepository: Query data
+    ← rawData
+System → BookingAnalyticsService: Calculate booking metrics
+    ← bookingMetrics
+System → RevenueService: Calculate revenue
+    ← revenueData
+System → OccupancyService: Calculate occupancy
+    ← occupancyData
+System → RatingService: Aggregate ratings
+    ← ratingData
+System → AnalyticsService: Assemble dashboard
+    ← dashboard
+System → CacheService: Cache response
+    ← Cached
+System → Owner: AnalyticsDashboard (HTTP 200)
+```
+
+### Filter Update Flow
+
+```
+Owner → System: ApplyFilters (HTTP POST /api/owner/analytics/filter)
+    ↓
+System → CacheService: Invalidate old cache
+System → AnalyticsRepository: Query with filters
+    ← filteredData
+System → AnalyticsService: Recalculate metrics
+    ← dashboard
+System → Owner: AnalyticsDashboard (HTTP 200)
+```
+
+### Export Flow
+
+```
+Owner → System: ExportAnalytics (HTTP POST /api/owner/analytics/export)
+    ↓
+System → ExportService: Generate PDF/CSV
+    ← fileUrl
+System → Owner: ExportResponse (HTTP 200)
+    ↓
+Owner → System: DownloadFile (HTTP GET fileUrl)
+System → Owner: File download
+```
+
+---
+
+## Expanded Alternative Sequences
+
+### Step 2: No Data Available
+| Condition | System Response | Recovery |
+|-----------|-----------------|----------|
+| New property, no bookings | Empty state with onboarding tips | "Complete your first booking" message |
+| Date range outside history | "No data for selected period" | Suggest available date range |
+| All bookings cancelled/pending | No metrics to show | "Waiting for completed stays" message |
+| Cache timeout during load | Show loading indicator | Retry automatically |
+
+### Step 5: Export Failures
+| Condition | System Response | Recovery |
+|-----------|-----------------|----------|
+| PDF generation timeout | Retry with smaller date range | "Try shorter period" suggestion |
+| File size too large | Compress or split | Multiple files option |
+| Storage quota exceeded | Error: "Export quota reached" | Cleanup old exports |
+| Format not supported | Default to CSV | "Format changed" notice |
+
+### Data Accuracy States
+| Condition | System Response | Recovery |
+|-----------|-----------------|----------|
+| Real-time mode selected | Switch to live queries | "Updated just now" badge |
+| Cached data shown | Display "Last updated X min ago" | Refresh button available |
+| Data pending aggregation | Show "Updating..." | Background refresh |
+| Discrepancy detected | Flag for review | "Data may be incomplete" warning |

@@ -233,8 +233,9 @@ redis-cli -h localhost -p 6379 ping
 
 - [Tech Stack](./docs/tech-stack.md)
 - [Design Guidelines](./docs/design-guidelines.md)
-- [Architecture](./docs/system-architecture.md)
+- [System Architecture](./docs/system-architecture.md)
 - [Code Standards](./docs/code-standards.md)
+- [Use Case Model](./docs/use-case-model/index.md) - Comprehensive model of all 17 use cases with boundary objects, internal objects, message flows, state machines, and error handling patterns
 
 ## License
 

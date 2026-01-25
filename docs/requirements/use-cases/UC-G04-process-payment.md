@@ -63,3 +63,133 @@ sequenceDiagram
 - Payment Gateway actions (process payment, send notification)
 
 No internal components mentioned (databases, APIs, webhooks).
+
+---
+
+## Boundary Objects
+
+| Boundary Object | Description | Data Elements |
+|----------------|-------------|---------------|
+| **PaymentRequest** | Payment initiation request | bookingId, amount, currency, paymentMethod, callbackUrl, cancelUrl |
+| **PaymentResponse** | Payment gateway response | paymentId, paymentUrl, status, expiresAt |
+| **PaymentNotification** | Gateway webhook notification | transactionId, bookingId, status, amount, signature, timestamp |
+| **PaymentConfirmation** | Final payment confirmation | paymentId, bookingId, status, transactionId, paidAt |
+| **PaymentReceipt** | Receipt data for display/email | receiptId, bookingDetails, paymentDetails, breakdown |
+
+---
+
+## Internal Software Objects
+
+| Internal Object | Responsibility |
+|-----------------|---------------|
+| **PaymentService** | Orchestrates payment flow |
+| **SePayGatewayAdapter** | SePay integration for VietQR/bank transfer |
+| **PolarGatewayAdapter** | Polar integration for global payments |
+| **PaymentValidator** | Validates payment requests and notifications |
+| **IdempotencyService** | Ensures exactly-once payment processing |
+| **BookingService** | Updates booking status after payment |
+| **NotificationService** | Sends confirmations via email/SMS |
+| **PaymentRepository** | Persists payment records |
+| **WebhookAuthenticator** | Verifies webhook signatures |
+| **RefundService** | Handles refund processing |
+
+---
+
+## Message Communication Sequence
+
+### Payment Initiation Flow
+
+```
+Guest → System: InitiatePayment (HTTP POST /api/payments/initiate)
+    ↓
+System → PaymentService: Create payment request
+    ↓
+System → IdempotencyService: Generate idempotency key
+    ← idempotencyKey
+System → SePayGatewayAdapter: Generate payment URL
+    ← PaymentResponse (paymentUrl, paymentId)
+System → PaymentRepository: Save payment (status: initiated)
+    ← PaymentRecord
+System → Guest: Redirect to gateway (HTTP 302)
+```
+
+### Payment Completion Flow (Success)
+
+```
+Guest → SePayGateway: Complete payment
+    ↓
+SePayGateway → System: Webhook notification (HTTP POST /api/webhooks/payment)
+    ↓
+System → WebhookAuthenticator: Verify signature
+    ← Valid
+System → IdempotencyService: Check idempotency
+    ← NotProcessed
+System → PaymentValidator: Validate notification
+    ← Valid
+System → PaymentRepository: Update payment (status: success)
+    ← Updated
+System → BookingService: Update booking (status: confirmed)
+    ← Updated
+System → NotificationService: Queue confirmation email
+    ← Queued
+System → SePayGateway: Acknowledge (HTTP 200)
+    ↓
+Guest → System: Redirect back (success callback)
+System → Guest: Display confirmation page
+```
+
+### Payment Failure Flow
+
+```
+SePayGateway → System: Webhook notification (status: failed)
+    ↓
+System → PaymentRepository: Update payment (status: failed)
+System → BookingService: Update booking (status: payment_failed)
+System → ReservationLockService: Release availability lock
+    ← Released
+System → NotificationService: Queue failure notification
+    ← Queued
+```
+
+### WebSocket: Real-time Payment Status
+
+```
+System (webhook handler) → WebSocket: Broadcast payment.updated event
+Guest (viewing booking) ← System: PaymentStatusUpdate
+```
+
+---
+
+## Expanded Alternative Sequences
+
+### Step 4: Payment Cancellation
+| Condition | System Response | Recovery |
+|-----------|-----------------|----------|
+| Guest cancels on gateway | Redirect to cancel URL | Keep booking pending for retry |
+| Payment timeout (30min) | Auto-cancel payment | Booking expires, release availability |
+| Gateway error | Retry payment initiation | Show "Try again" option |
+| Session lost | Preserve booking state | Resume payment on return |
+
+### Step 6: Payment Verification Failures
+| Condition | System Response | Recovery |
+|-----------|-----------------|----------|
+| Invalid signature | Reject webhook (401) | Log for security review |
+| Duplicate notification | Acknowledge (200) - already processed | Idempotent response |
+| Amount mismatch | Flag for manual review | Keep booking pending |
+| Invalid bookingId | Reject webhook (400) | Log error, notify support |
+
+### Step 7: Payment Status Handling
+| Condition | System Response | Recovery |
+|-----------|-----------------|----------|
+| Payment successful | Booking confirmed, release lock | Send confirmation, notify owner |
+| Payment failed | Booking failed, release lock | Allow retry, send failure notice |
+| Payment pending | Keep booking pending | Check status periodically |
+| Partial payment | Flag for review | Hold reservation, notify support |
+
+### Step 8: System Integration Failures
+| Condition | System Response | Recovery |
+|-----------|-----------------|----------|
+| Booking update fails | Rollback payment status | Queue for retry |
+| Lock release fails | Log for manual cleanup | Cron job cleanup |
+| Notification fails | Continue, log for retry | Async retry with backoff |
+| Email service down | Queue in RabbitMQ | Process when service recovers |

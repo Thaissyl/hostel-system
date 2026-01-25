@@ -57,3 +57,121 @@ sequenceDiagram
 - System responses (validate, reserve, create, redirect)
 
 No internal components mentioned (databases, locks, services).
+
+---
+
+## Boundary Objects
+
+| Boundary Object | Description | Data Elements |
+|----------------|-------------|---------------|
+| **BookingRequest** | Guest's booking initiation | listingId, roomId, checkInDate, checkOutDate, guestCount, specialRequests |
+| **BookingConfirmation** | Created booking details | bookingId, status, reservationExpiresAt, priceBreakdown |
+| **PriceBreakdown** | Detailed cost calculation | basePrice, cleaningFee, serviceFee, taxes, totalPrice, currency |
+| **AvailabilityReservation** | Temporary hold on dates | reservationId, roomId, dateRange, expiresAt |
+| **GuestDetails** | Guest information for booking | guestId, name, email, phone, specialRequests |
+| **CheckoutSession** | Checkout page session data | sessionId, listingData, dateData, pricingData, expiresAt |
+
+---
+
+## Internal Software Objects
+
+| Internal Object | Responsibility |
+|-----------------|---------------|
+| **BookingService** | Orchestrates booking creation flow |
+| **AvailabilityService** | Manages availability reservations and locks |
+| **PricingService** | Calculates total pricing with fees and taxes |
+| **BookingRepository** | Persists booking records |
+| **ReservationLockService** | Manages distributed locks for availability (Redis) |
+| **GuestService** | Fetches guest details |
+| **AuthService** | Validates authentication state |
+| **BookingValidator** | Validates booking constraints (dates, capacity) |
+| **NotificationService** | Queues booking notifications |
+| **SessionService** | Manages temporary booking session data |
+
+---
+
+## Message Communication Sequence
+
+### Booking Creation Flow
+
+```
+Guest → System: BookNow (HTTP POST /api/bookings/initiate)
+    ↓
+System → AuthService: Check authentication
+    ← NotAuthenticated
+System → Guest: Redirect to login (HTTP 302)
+Guest → System: Authenticate
+    ↓
+System → BookingService: Create booking session
+    ← SessionId
+System → Guest: Checkout page (HTTP 200)
+    ↓
+Guest → System: ConfirmBooking (HTTP POST /api/bookings)
+    ↓
+System → BookingValidator: Validate constraints
+    ← Valid
+System → AvailabilityService: Check availability
+    ← Available
+System → ReservationLockService: Acquire lock (Redis, 15min TTL)
+    ← LockAcquired (reservationId)
+System → PricingService: Calculate total
+    ← PriceBreakdown
+System → BookingRepository: Create booking (status: pending_payment)
+    ← BookingRecord
+System → NotificationService: Queue notifications
+    ← Queued
+System → Guest: Redirect to payment (HTTP 302)
+```
+
+### Lock Expiration Flow
+
+```
+System (scheduler) → BookingRepository: Find expired pending bookings
+    ← expiredBookings[]
+System → ReservationLockService: Release locks
+    ← Released
+System → BookingRepository: Update status (expired)
+```
+
+### WebSocket: Real-time Availability
+
+```
+System → WebSocket: Broadcast booking.created event
+Guest(s) viewing listing ← System: AvailabilityUpdate
+```
+
+---
+
+## Expanded Alternative Sequences
+
+### Step 2: Authentication States
+| Condition | System Response | Recovery |
+|-----------|-----------------|----------|
+| Not logged in | Redirect to login | Preserve booking data in session |
+| Session expired | Re-authenticate required | Restore booking session after login |
+| Email not verified | Block with verification prompt | Verify email to continue |
+| Account suspended | Block with message | Contact support |
+
+### Step 3: Availability Changes
+| Condition | System Response | Recovery |
+|-----------|-----------------|----------|
+| Dates became unavailable | Error: "No longer available" | Show alternative dates |
+| Price increased since page load | Show new price | Confirm or cancel |
+| Room capacity exceeded | Error: "Too many guests" | Suggest additional rooms |
+| Minimum stay not met | Error: "Minimum X nights" | Adjust dates |
+
+### Step 4: Reservation Failures
+| Condition | System Response | Recovery |
+|-----------|-----------------|----------|
+| Concurrent booking attempt | Error: "Someone is booking this room" | Retry button with countdown |
+| Lock acquisition timeout | Error: "Unable to reserve. Try again" | Auto-retry up to 3 times |
+| Redis connection failure | Fallback to database lock | Degraded performance notice |
+| Duplicate booking detected | Error: "You already have a booking" | Link to existing booking |
+
+### Step 7: Booking Creation Failures
+| Condition | System Response | Recovery |
+|-----------|-----------------|----------|
+| Database constraint violation | Error: "Booking creation failed" | Release lock, retry |
+| Payment gateway unavailable | Queue for retry | Notify when payment available |
+| Notification queue full | Continue booking | Log for later notification |
+| Session expired | Error: "Session expired" | Restart booking flow |
