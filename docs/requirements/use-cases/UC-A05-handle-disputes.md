@@ -53,3 +53,166 @@ stateDiagram-v2
 ## Black Box Compliance
 
 ✅ **COMPLIANT** - All steps describe external interactions only.
+
+---
+
+## Boundary Objects
+
+| Boundary Object | Description | Data Elements |
+|----------------|-------------|---------------|
+| **DisputeList** | List of open disputes | disputes[], totalCount, priority, category, age |
+| **DisputeDetails** | Complete dispute information | disputeId, bookingId, parties, messages[], evidence[], timeline |
+| **DisputeEvidence** | Uploaded evidence file | fileId, url, type (image/document), uploadedBy, timestamp |
+| **RulingDecision** | Admin ruling result | ruling (refund_guest/refund_owner/split), amounts[], reason, appealable |
+| **DisputeMessage** | Message in dispute thread | message, sender, timestamp, visibility |
+
+---
+
+## Internal Software Objects
+
+| Internal Object | Responsibility |
+|-----------------|---------------|
+| **DisputeService** | Manages dispute lifecycle |
+| **DisputeRepository** | Queries dispute data |
+| **EvidenceUploadService** | Handles evidence file uploads |
+| **RefundService** | Processes dispute refunds |
+| **DisputeNotificationService** | Notifies parties of updates |
+| **EscalationService** | Handles legal escalation |
+| **AuditLogService** | Logs dispute decisions |
+| **MessagingService** | Manages dispute messaging |
+| **DisputeTimerService** | Tracks SLA deadlines |
+
+---
+
+## Message Communication Sequence
+
+### View Disputes Flow
+
+```
+Admin → System: ViewDisputes (HTTP GET /api/admin/disputes)
+    ↓
+System → DisputeRepository: Query open disputes
+    ← disputes[]
+System → DisputeTimerService: Check SLA compliance
+    ← slaStatus[]
+System → Admin: DisputeList (HTTP 200)
+```
+
+### Review Dispute Flow
+
+```
+Admin → System: ViewDispute (HTTP GET /api/admin/disputes/:id)
+    ↓
+System → DisputeRepository: Get dispute details
+    ← dispute
+System → BookingRepository: Get booking context
+    ← booking
+System → MessagingService: Get message thread
+    ← messages[]
+System → Admin: DisputeDetails (HTTP 200)
+```
+
+### Evidence Upload Flow
+
+```
+Admin → System: RequestInfo (HTTP POST /api/admin/disputes/:id/request-info)
+    ↓
+System → DisputeNotificationService: Notify parties
+    ← Sent
+Party → System: UploadEvidence (HTTP POST /api/disputes/:id/evidence)
+    ↓
+System → EvidenceUploadService: Upload to S3
+    ← fileUrl
+System → DisputeRepository: Attach evidence
+    ← Attached
+System → Admin: Evidence uploaded notification (WebSocket)
+```
+
+### Make Ruling Flow
+
+```
+Admin → System: MakeRuling (HTTP POST /api/admin/disputes/:id/ruling)
+    ↓
+System → RefundService: Calculate refunds
+    ← refundAmounts
+System → Admin: Show confirmation (refund split)
+Admin → System: ConfirmRuling
+    ↓
+System → DisputeRepository: Update status (resolved)
+    ← Updated
+System → RefundService: Process refunds
+    ← refundIds
+System → DisputeNotificationService: Notify both parties
+    ← Queued
+System → AuditLogService: Log ruling with reason
+    ← Logged
+System → Admin: RulingDecision (HTTP 200)
+```
+
+### Escalation Flow
+
+```
+Admin → System: EscalateDispute (HTTP POST /api/admin/disputes/:id/escalate)
+    ↓
+System → DisputeRepository: Update status (escalated)
+    ← Updated
+System → EscalationService: Notify legal team
+    ← Notified
+System → DisputeNotificationService: Notify parties
+    ← Queued
+System → Admin: Confirmation (HTTP 200)
+```
+
+### SLA Tracking Flow
+
+```
+System (scheduler) → DisputeTimerService: Check SLA deadlines
+    ← overdueDisputes[]
+System → DisputeNotificationService: Alert admins (escalated overdue)
+    ← Alerted
+```
+
+---
+
+## Expanded Alternative Sequences
+
+### Step 2: Dispute Queue States
+| Condition | System Response | Recovery |
+|-----------|-----------------|----------|
+| No open disputes | "No open disputes" celebration | Show resolved stats |
+| Overdue disputes | Highlight with red badges | Priority sorting |
+| High value disputes | Show prominent badges | "$$$" indicators |
+| Complex disputes | Flag for senior review | Escalation option |
+
+### Step 5: Evidence States
+| Condition | System Response | Recovery |
+|-----------|-----------------|----------|
+| Insufficient evidence | "Request more info" button | Auto-send request template |
+| Evidence disputed by party | Flag conflicting items | Highlight discrepancies |
+| Large file uploads | Queue for processing | Progress indicator |
+| Evidence expired | Warning: "Evidence expired" | Request fresh evidence |
+
+### Step 6: Ruling Options
+| Condition | System Response | Recovery |
+|-----------|-----------------|----------|
+| Guest fault | Full refund to guest | Show refund amount |
+| Owner fault | Full payment to owner | Show payment amount |
+| Split fault | Split percentages | Custom split available |
+| Inconclusive | Escalate recommendation | "Requires investigation" |
+| Both at fault | 50/50 split default | Custom split option |
+
+### Step 7: Refund Failures
+| Condition | System Response | Recovery |
+|-----------|-----------------|----------|
+| Payment gateway timeout | Queue for retry | "Processing refund" status |
+| Refund exceeds amount | Error: "Invalid amount" | Recalculate |
+| Partial refund only | Process available amount | Flag remainder |
+| Refund account closed | Manual processing required | Alert finance team |
+
+### Escalation Conditions
+| Condition | System Response | Recovery |
+|-----------|-----------------|----------|
+| Legal involvement required | Escalate button | Legal team notified |
+| High value dispute | Auto-escalate threshold | >$5000 auto-escalates |
+| Criminal activity | Emergency escalation | Immediate alert |
+| Regulatory concern | Compliance escalation | Legal + compliance notified |

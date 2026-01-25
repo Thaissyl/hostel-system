@@ -59,3 +59,120 @@ sequenceDiagram
 - System responses (validate, create, notify, display)
 
 No internal components mentioned (databases, storage services, image processors).
+
+---
+
+## Boundary Objects
+
+| Boundary Object | Description | Data Elements |
+|----------------|-------------|---------------|
+| **PropertyRegistration** | Property submission data | propertyName, address, type, description, images[], contactInfo |
+| **PropertyResponse** | Created property details | propertyId, status, submittedAt, approvalETA |
+| **PropertyImage** | Uploaded property image | imageId, url, thumbnailUrl, caption, order |
+| **AddressInfo** | Property address data | street, ward, district, city, province, coordinates, country |
+| **DuplicateWarning** | Similar property detection | similarPropertyId, similarityScore, matchReasons[] |
+
+---
+
+## Internal Software Objects
+
+| Internal Object | Responsibility |
+|-----------------|---------------|
+| **PropertyService** | Manages property registration |
+| **PropertyValidator** | Validates property data and constraints |
+| **DuplicateDetectionService** | Identifies similar existing properties |
+| **ImageUploadService** | Handles image uploads to S3 |
+| **ImageProcessingService** | Generates thumbnails and WebP variants |
+| **AddressValidationService** | Validates Vietnam addresses |
+| **GeocodingService** | Converts addresses to coordinates |
+| **PropertyRepository** | Persists property records |
+| **NotificationService** | Notifies admins of pending approvals |
+| **OwnerVerificationService** | Checks owner verification status |
+
+---
+
+## Message Communication Sequence
+
+### Property Registration Flow
+
+```
+Owner → System: RegisterProperty (HTTP POST /api/properties)
+    ↓
+System → PropertyValidator: Validate data
+    ← Valid
+System → AddressValidationService: Validate address
+    ← Valid Vietnam address
+System → GeocodingService: Get coordinates
+    ← {lat, lng}
+System → DuplicateDetectionService: Check for duplicates
+    ← No duplicates found
+System → ImageUploadService: Upload images to S3
+    ← imageUrls[]
+System → ImageProcessingService: Generate thumbnails
+    ← thumbnails[]
+System → PropertyRepository: Create property (status: pending_approval)
+    ← PropertyRecord
+System → NotificationService: Queue admin notification
+    ← Queued
+System → Owner: PropertyResponse (HTTP 201)
+```
+
+### Image Upload Flow
+
+```
+Owner → System: UploadImage (HTTP POST /api/images/upload)
+    ↓
+System → ImageUploadService: Validate and upload
+    ← imageId
+System → ImageProcessingService: Process async
+    ← Processing
+System → Owner: ImageUploadResponse (HTTP 201)
+```
+
+### Admin Notification Flow
+
+```
+System → RabbitMQ: Publish property.pending_approval
+    ↓
+Admin Notification Worker → NotificationService: Send to admins
+    ← Sent
+```
+
+---
+
+## Expanded Alternative Sequences
+
+### Step 4: Image Upload Failures
+| Condition | System Response | Recovery |
+|-----------|-----------------|----------|
+| File too large (>5MB) | Error: "Max 5MB per image" | Compress and retry |
+| Invalid format | Error: "JPG/PNG only" | Show supported formats |
+| Network timeout | Retry upload | Auto-retry up to 3 times |
+| S3 service error | Queue for retry | Background sync |
+| Processing failed | Store original, mark for retry | Cron job retry |
+| Max images exceeded (10) | Error: "Max 10 images" | Remove images to add more |
+
+### Step 6: Validation Failures
+| Condition | System Response | Recovery |
+|-----------|-----------------|----------|
+| Missing required fields | Inline errors | Highlight missing fields |
+| Invalid Vietnam province | Error: "Select valid province" | Show province list |
+| Invalid phone format | Error: "Invalid phone number" | Show format example |
+| Description too short | Error: "Min 100 characters" | Character count |
+| Website URL invalid | Error: "Invalid URL" | Allow empty, validate if present |
+
+### Step 6: Duplicate Detection
+| Condition | System Response | Recovery |
+|-----------|-----------------|----------|
+| Exact address match | Warning: "Property already exists" | Link to existing |
+| Similar name + location | Warning: "Similar property found" | Allow with confirmation |
+| Same owner, nearby | Info: "Your nearby property" | Show existing property |
+| Suspicious similarity | Flag for review | Admin will investigate |
+
+### Step 9: Auto-Approval
+| Condition | System Response | Recovery |
+|-----------|-----------------|----------|
+| Verified owner + clean record | Auto-approve | Set status: active |
+| New owner or flags | Manual review | Queue for approval |
+| Insufficient info | Request more info | Prompt for details |
+| Verification pending | Hold for verification | Notify when verified |

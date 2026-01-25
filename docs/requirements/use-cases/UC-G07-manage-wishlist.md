@@ -44,3 +44,108 @@ flowchart LR
 ## Black Box Compliance
 
 ✅ **COMPLIANT** - All steps describe external interactions only.
+
+---
+
+## Boundary Objects
+
+| Boundary Object | Description | Data Elements |
+|----------------|-------------|---------------|
+| **WishlistItem** | Saved listing item | listingId, addedAt, currentPrice, thumbnailUrl |
+| **WishlistResponse** | Wishlist operation result | action (added/removed), wishlistCount |
+| **WishlistList** | Complete wishlist | items[], totalCount, priceUpdates[] |
+| **PriceAlert** | Price drop notification | listingId, oldPrice, newPrice, dropPercentage |
+
+---
+
+## Internal Software Objects
+
+| Internal Object | Responsibility |
+|-----------------|---------------|
+| **WishlistService** | Manages wishlist CRUD operations |
+| **WishlistRepository** | Persists wishlist data |
+| **ListingService** | Fetches current listing data |
+| **PriceTrackerService** | Monitors price changes |
+| **NotificationService** | Sends price drop alerts |
+| **AnalyticsService** | Logs wishlist events |
+| **LocalStorageSyncService** | Manages local storage fallback |
+
+---
+
+## Message Communication Sequence
+
+### Add/Remove Wishlist Flow
+
+```
+Guest → System: ToggleWishlist (HTTP POST /api/wishlist/toggle)
+    ↓
+System → WishlistService: Process toggle
+    ↓
+System → WishlistRepository: Check existing
+    ← Not found
+System → WishlistRepository: Add item
+    ← Added
+System → AnalyticsService: Log event
+    ← Logged
+System → Guest: WishlistResponse (added)
+    ↓
+Guest UI: Optimistic update (heart filled)
+```
+
+### Sync Wishlist Flow (Logged In)
+
+```
+Guest → System: SyncWishlist (HTTP POST /api/wishlist/sync)
+    ↓
+System → LocalStorageSyncService: Get local wishlist
+    ← localItems[]
+System → WishlistRepository: Merge with server
+    ← mergedItems
+System → PriceTrackerService: Enable alerts for items
+    ← enabled
+System → Guest: WishlistList
+```
+
+### Price Drop Alert Flow
+
+```
+System (scheduler) → PriceTrackerService: Check prices
+    ← priceChanges[]
+System → NotificationService: Queue alerts
+    ← queued
+Guest ← System: Email/Push notification
+```
+
+---
+
+## Expanded Alternative Sequences
+
+### Step 1: Not Logged In
+| Condition | System Response | Recovery |
+|-----------|-----------------|----------|
+| Guest not authenticated | Save to local storage | "Sign in to sync" prompt |
+| Local storage full (100 items) | Error: "Wishlist full" | Remove items to add more |
+| Local storage disabled | Show warning | Wishlist lost on refresh |
+
+### Step 3: API Call Failures
+| Condition | System Response | Recovery |
+|-----------|-----------------|----------|
+| Network timeout | Revert optimistic update | "Unable to save" toast |
+| Server error (500) | Queue for retry | Background sync |
+| Rate limit exceeded | Show "Try again later" | Exponential backoff |
+| Listing deleted | Remove from wishlist | Silently clean up |
+
+### Step 5: Empty Wishlist
+| Condition | System Response | Recovery |
+|-----------|-----------------|----------|
+| No saved items | Empty state illustration | "Start exploring" CTA |
+| All items unavailable | Show unavailable badge | "Remove unavailable" button |
+| First-time user | Onboarding tooltip | How to use wishlist |
+
+### Step 5: Price Updates
+| Condition | System Response | Recovery |
+|-----------|-----------------|----------|
+| Price increased | Show old price strikethrough | "Price since you saved" badge |
+| Price dropped | Highlight with green | "Price dropped X%" banner |
+| Listing unavailable | "No longer available" badge | Remove option |
+| Listing delisted | Hide from wishlist | Notification sent |
