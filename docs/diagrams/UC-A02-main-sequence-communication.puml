@@ -1,0 +1,204 @@
+@startuml UC-A02 Main Sequence Communication Diagram
+!theme plain
+skinparam backgroundColor #FEFEFE
+skinparam handwritten false
+skinparam maxMessageSize 150
+skinparam sequenceMessageAlign center
+skinparam noteBackgroundColor #FEFECE
+skinparam noteBorderColor #E0E000
+skinparam arrowColor #000000
+skinparam actorBorderColor #000000
+skinparam actorBackgroundColor #FEFECE
+
+title UC-A02: Manage Users - Main Sequence Communication Diagram
+note right of Admin
+  **Scenario**: Admin views user and suspends account
+  **Objects**: 8 participating objects
+  - 1 boundary (UserManagementInteraction)
+  - 3 entity (User, Booking, Review)
+  - 1 control (UserManagementControl)
+  - 3 application logic (Validator, Notifier, Audit)
+end note
+
+' ============================================
+' PARTICIPANTS
+' ============================================
+actor Admin as admin
+participant ": UserManagementInteraction" as ui
+participant ": UserManagementControl" as control
+participant ": UserStatusValidator" as validator
+participant ": UserNotificationService" as notifier
+participant ": AuditLogger" as audit
+participant ": User" as user
+participant ": Booking" as booking
+participant ": Review" as review
+
+' ============================================
+' SEQUENCE 1: VIEW USERS
+' ============================================
+== 1. View User List ==
+
+admin -> ui: 1: User Management\n(Navigate to user management)
+activate ui
+note right: Trigger: Admin navigates to\n"User Management"
+
+ui -> control: 1.1: List Request\n(Get all users)
+activate control
+note left: Boundary to Control
+
+control -> user: 1.2: Get Users\n(Query user list)
+activate user
+user --> control: 1.3: User List\n(Return users)
+deactivate user
+
+control -> ui: 1.4: Display Table\n(Show user table)
+deactivate control
+
+ui -> admin: 1.5: Show Users\n(Display users)
+deactivate ui
+
+' ============================================
+' SEQUENCE 2: SEARCH USER
+' ============================================
+== 2. Search User ==
+
+admin -> ui: 2: Search User\n(Search by email/name/phone)
+activate ui
+
+ui -> control: 2.1: Search Query\n(Search criteria)
+activate control
+
+control -> user: 2.2: Search Users\n(Search users)
+activate user
+user --> control: 2.3: Search Results\n(Matching users)
+deactivate user
+
+control -> ui: 2.4: Display Results\n(Show results)
+deactivate control
+
+ui -> admin: 2.5: Show Results\n(Display search results)
+deactivate ui
+
+' ============================================
+' SEQUENCE 3: VIEW USER DETAILS
+' ============================================
+== 3. View User Details ==
+
+admin -> ui: 3: Select User\n(Click on user)
+activate ui
+
+ui -> control: 3.1: User Details\n(Request user details)
+activate control
+
+control -> user: 3.2: Get User\n(Get user data)
+activate user
+user --> control: 3.3: User Data\n(User details)
+deactivate user
+
+par Fetch Related Data
+    control -> booking: 3.4: Get Bookings\n(Get user's bookings)
+    activate booking
+    booking --> control: 3.5: User Bookings\n(Booking list)
+    deactivate booking
+and
+    control -> review: 3.6: Get Reviews\n(Get user's reviews)
+    activate review
+    review --> control: 3.7: User Reviews\n(Review list)
+    deactivate review
+end
+
+control -> ui: 3.8: Display Profile\n(Show full profile)
+deactivate control
+
+ui -> admin: 3.9: Show Profile\n(Display profile)
+deactivate ui
+
+note right of admin
+  User profile displayed with:
+  - Basic information
+  - Booking history
+  - Review history
+  - Activity log
+end note
+
+' ============================================
+' SEQUENCE 4-5: SUSPEND USER
+' ============================================
+== 4-5. Suspend User ==
+
+admin -> ui: 4: Suspend User\n(Click suspend)
+activate ui
+
+ui -> control: 4.1: Suspend Request\n(Suspend request)
+activate control
+
+control -> validator: 4.2: Validate Suspend\n(Validate suspension)
+activate validator
+validator --> control: 4.3: Can Suspend\n(Can suspend user)
+deactivate validator
+
+control -> ui: 4.4: Request Reason\n(Ask for reason)
+deactivate control
+
+ui -> admin: 4.5: Show Reason Prompt\n(Display reason input)
+deactivate ui
+
+admin -> ui: 5: Enter Reason\n(Enter suspension reason)
+activate ui
+
+ui -> control: 5.1: Suspend Reason\n(Reason + duration)
+activate control
+
+control -> user: 5.2: Update Status\n(Set status to suspended)
+activate user
+user --> control: 5.3: Status Suspended\n(Status updated)
+deactivate user
+
+control -> audit: 5.4: Log Action\n(Log status change)
+activate audit
+audit --> control: 5.5: Action Logged\n(Action logged)
+deactivate audit
+
+control -> notifier: 5.6: Notify User\n(Email user)
+activate notifier
+notifier --> control: 5.7: Notification Sent\n(Email sent)
+deactivate notifier
+
+control -> ui: 5.8: Suspend Complete\n(Suspension done)
+deactivate control
+
+ui -> admin: 5.9: Show Suspended\n(Display confirmation)
+deactivate ui
+
+note right of admin
+  **User Suspended Successfully**
+  - Status updated to "suspended"
+  - User notified via email
+  - Audit log created
+  - Bookings preserved
+end note
+
+' ============================================
+' OBJECT SUMMARY
+' ============================================
+note over admin, review
+  **Participating Objects (8)**
+
+  **Boundary (1)**:
+  - :UserManagementInteraction
+
+  **Entity (3)**:
+  - :User
+  - :Booking
+  - :Review
+
+  **Control (1)**:
+  - :UserManagementControl
+
+  **Application Logic (3)**:
+  - :UserStatusValidator
+  - :UserNotificationService
+  - :AuditLogger
+end note
+
+@enduml

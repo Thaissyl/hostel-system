@@ -1,0 +1,279 @@
+@startuml Hostel Management System - Architecture Overview
+!theme plain
+skinparam backgroundColor #FEFEFE
+skinparam handwritten false
+
+title Hostel Management System - Component Architecture
+
+' ============================================
+' ACTORS
+' ============================================
+actor "Admin" as ADMIN
+actor "Guest" as GUEST
+actor "Owner" as OWNER
+
+' ============================================
+' API LAYER
+' ============================================
+package "API Gateway Layer" {
+    [HTTP/REST API] as REST_API
+    [WebSocket API] as WS_API
+    [Authentication\nMiddleware] as AUTHMiddleware
+}
+
+' ============================================
+' CORE SERVICES LAYER
+' ============================================
+package "Core Services Layer" {
+    package "User Management" {
+        [UserService] as UserSvc
+        [UserSearchService] as UserSearchSvc
+        [UserActionService] as UserActionSvc
+    }
+
+    package "Listing Management" {
+        [ListingService] as ListingSvc
+        [ListingValidator] as ListingVal
+        [SearchIndexService] as SearchIndexSvc
+    }
+
+    package "Booking Management" {
+        [BookingService] as BookingSvc
+        [BookingValidator] as BookingVal
+        [ReservationLockService] as LockSvc
+    }
+
+    package "Search & Discovery" {
+        [SearchService] as SearchSvc
+        [SearchQueryValidator] as SearchVal
+        [RelevanceScorer] as Scorer
+        [GeoLocationService] as GeoSvc
+    }
+
+    package "Availability Management" {
+        [AvailabilityService] as AvailSvc
+        [CalendarService] as CalendarSvc
+    }
+
+    package "Payment Processing" {
+        [PaymentService] as PaymentSvc
+        [PricingService] as PricingSvc
+    }
+
+    package "Content & Media" {
+        [ReviewService] as ReviewSvc
+        [MediaService] as MediaSvc
+        [LocationService] as LocationSvc
+        [AmenityService] as AmenitySvc
+    }
+
+    package "Communication" {
+        [NotificationService] as NotifySvc
+        [EmailService] as EmailSvc
+        [SMSService] as SmsSvc
+    }
+
+    package "Support Services" {
+        [AuthService] as AuthSvc
+        [SessionService] as SessionSvc
+        [AuditLogService] as AuditSvc
+        [AnalyticsService] as AnalyticsSvc
+    }
+}
+
+' ============================================
+' DATA LAYER
+' ============================================
+package "Data Layer" {
+    database "MySQL Database" as DB {
+        frame "Tables" {
+            [users] as users_tbl
+            [listings] as listings_tbl
+            [bookings] as bookings_tbl
+            [properties] as properties_tbl
+            [reviews] as reviews_tbl
+            [amenities] as amenities_tbl
+        }
+    }
+
+    database "Elasticsearch" as ES {
+        [Listing Index] as listing_idx
+        [Search Index] as search_idx
+    }
+
+    queue "Redis Cache" as REDIS {
+        [Session Cache] as session_cache
+        [Search Cache] as search_cache
+        [Listing Cache] as listing_cache
+        [Distributed Locks] as dist_locks
+    }
+}
+
+' ============================================
+' MESSAGE QUEUE
+' ============================================
+queue "RabbitMQ" as MQ {
+    [listing.created] as mq_listing
+    [booking.created] as mq_booking
+    [search.index.update] as mq_search
+    [notification.queue] as mq_notify
+}
+
+' ============================================
+' EXTERNAL SERVICES
+' ============================================
+package "External Services" {
+    [Payment Gateway] as PaymentGW
+    [CDN] as CDN
+    [Email Provider] as EmailProvider
+    [Maps API] as MapsAPI
+}
+
+' ============================================
+' CONNECTIONS - ADMIN FLOWS
+' ============================================
+ADMIN --> REST_API
+REST_API --> AUTHMiddleware
+AUTHMiddleware --> AuthSvc
+
+REST_API --> UserSvc
+REST_API --> UserSearchSvc
+REST_API --> UserActionSvc
+
+UserSvc --> users_tbl
+UserSearchSvc --> users_tbl
+UserActionSvc --> users_tbl
+UserActionSvc --> bookings_tbl
+UserActionSvc --> AuditSvc
+UserActionSvc --> NotifySvc
+
+' ============================================
+' CONNECTIONS - GUEST FLOWS
+' ============================================
+GUEST --> REST_API
+GUEST --> WS_API
+
+REST_API --> SearchSvc
+SearchSvc --> SearchVal
+SearchSvc --> ES
+SearchSvc --> REDIS
+SearchSvc --> AvailSvc
+SearchSvc --> PricingSvc
+SearchSvc --> Scorer
+SearchSvc --> GeoSvc
+
+REST_API --> ListingSvc
+ListingSvc --> ES
+ListingSvc --> REDIS
+ListingSvc --> ReviewSvc
+ListingSvc --> MediaSvc
+ListingSvc --> LocationSvc
+
+REST_API --> BookingSvc
+BookingSvc --> BookingVal
+BookingSvc --> LockSvc
+BookingSvc --> AvailSvc
+BookingSvc --> PricingSvc
+BookingSvc --> PaymentSvc
+BookingSvc --> REDIS
+
+BookingSvc --> bookings_tbl
+BookingSvc --> listings_tbl
+BookingSvc --> MQ
+
+WS_API --> AvailSvc
+
+' ============================================
+' CONNECTIONS - OWNER FLOWS
+' ============================================
+OWNER --> REST_API
+REST_API --> ListingSvc
+ListingSvc --> ListingVal
+ListingSvc --> ES
+ListingSvc --> MQ
+ListingSvc --> AmenitySvc
+
+REST_API --> CalendarSvc
+CalendarSvc --> AvailSvc
+
+' ============================================
+' SERVICE INTERCONNECTIONS
+' ============================================
+NotifySvc --> MQ
+NotifySvc --> EmailSvc
+NotifySvc --> SmsSvc
+
+EmailSvc --> EmailProvider
+MediaSvc --> CDN
+LocationSvc --> MapsAPI
+
+PaymentSvc --> PaymentGW
+
+SearchIndexSvc --> ES
+SearchIndexSvc --> MQ
+
+AnalyticsSvc --> MQ
+
+' ============================================
+' BACKGROUND WORKERS
+' ============================================
+package "Background Workers" {
+    [Search Index Worker] as IndexWorker
+    [Notification Worker] as NotifyWorker
+    [Analytics Worker] as AnalyticsWorker
+}
+
+MQ --> IndexWorker
+MQ --> NotifyWorker
+MQ --> AnalyticsWorker
+
+IndexWorker --> ES
+NotifyWorker --> EmailSvc
+AnalyticsWorker --> AnalyticsSvc
+
+' ============================================
+' NOTES
+' ============================================
+note right of ADMIN
+  **Admin Capabilities**
+  - User management
+  - System monitoring
+  - Content moderation
+  - Analytics viewing
+end note
+
+note right of GUEST
+  **Guest Capabilities**
+  - Search hostels
+  - View listings
+  - Create bookings
+  - Process payments
+  - Submit reviews
+end note
+
+note right of OWNER
+  **Owner Capabilities**
+  - Register properties
+  - Manage listings
+  - Update calendar
+  - View bookings
+  - Access analytics
+end note
+
+note bottom of MQ
+  **Async Communication**
+  - Search index updates
+  - Notification delivery
+  - Analytics aggregation
+  - Event broadcasting
+end note
+
+note bottom of REDIS
+  **Caching & Locking**
+  - Session storage (15min TTL)
+  - Search cache (5min TTL)
+  - Listing cache (15min TTL)
+  - Distributed locks (15min TTL)
+end note
+
+@enduml

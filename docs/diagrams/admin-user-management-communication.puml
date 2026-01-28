@@ -1,0 +1,227 @@
+@startuml Admin User Management Communication Diagrams
+!theme plain
+skinparam backgroundColor #FEFEFE
+skinparam handwritten false
+skinparam sequenceMessageAlign center
+skinparam noteBackgroundColor #FEFECE
+skinparam noteBorderColor #E0E000
+
+title Admin User Management - Communication Diagrams
+
+' ============================================
+' VIEW USERS FLOW
+' ============================================
+== View Users Flow ==
+
+actor Admin as admin
+participant "API Gateway" as api
+participant "UserController" as controller
+participant "UserSearchService" as search
+participant "UserRepository" as repo
+
+admin -> api: GET /api/admin/users
+activate api
+
+api -> controller: ViewUsers()
+activate controller
+
+controller -> repo: Query users with pagination
+activate repo
+repo --> controller: users[]
+deactivate repo
+
+controller -> search: Apply search/filters
+activate search
+search --> controller: filteredUsers
+deactivate search
+
+controller --> api: UserList
+deactivate controller
+
+api --> admin: HTTP 200 UserList
+deactivate api
+
+note right of admin
+  Returns paginated list
+  of users with applied
+  filters
+end note
+
+' ============================================
+' SEARCH USERS FLOW
+' ============================================
+== Search Users Flow ==
+
+admin -> api: POST /api/admin/users/search
+activate api
+
+api -> search: SearchUsers(email, name, phone)
+activate search
+search -> repo: Query by criteria
+activate repo
+repo --> search: matchingUsers
+deactivate repo
+search --> api: UserList
+deactivate search
+
+api --> admin: HTTP 200 UserList
+deactivate api
+
+' ============================================
+' SUSPEND USER FLOW
+' ============================================
+== Suspend User Flow ==
+
+participant "UserActionService" as action
+participant "BookingService" as booking
+participant "AuthService" as auth
+participant "NotificationService" as notify
+participant "AuditLogService" as audit
+
+admin -> api: POST /api/admin/users/:id/suspend
+activate api
+
+api -> controller: SuspendUser(userId, reason, duration)
+activate controller
+
+controller -> action: ProcessSuspension(userId, reason, duration)
+activate action
+
+action -> repo: Update status (suspended)
+activate repo
+repo --> action: Updated
+deactivate repo
+
+action -> booking: Cancel upcoming bookings
+activate booking
+booking --> action: Cancelled
+deactivate booking
+
+action -> auth: Invalidate all tokens
+activate auth
+auth --> action: Invalidated
+deactivate auth
+
+par Parallel Notifications
+    action -> notify: Queue suspension notification
+    activate notify
+    notify --> action: Queued
+    deactivate notify
+and
+    action -> audit: Log suspension with reason
+    activate audit
+    audit --> action: Logged
+    deactivate audit
+end
+
+action --> controller: ActionConfirmation
+deactivate action
+
+controller --> api: ActionConfirmation
+deactivate controller
+
+api --> admin: HTTP 200 ActionConfirmation
+deactivate api
+
+note right of admin
+  User status changed to SUSPENDED
+  - All upcoming bookings cancelled
+  - All auth tokens invalidated
+  - User notified via email
+  - Action logged for audit
+end note
+
+' ============================================
+' BAN USER FLOW
+' ============================================
+== Ban User Flow ==
+
+admin -> api: POST /api/admin/users/:id/ban
+activate api
+
+api -> controller: BanUser(userId, justification)
+activate controller
+
+controller -> action: ProcessBan(userId, justification)
+activate action
+
+action -> repo: Update status (banned)
+activate repo
+repo --> action: Updated
+deactivate repo
+
+action -> booking: Cancel ALL bookings
+activate booking
+booking --> action: Cancelled
+deactivate booking
+
+action -> auth: Invalidate all tokens
+activate auth
+auth --> action: Invalidated
+deactivate auth
+
+par Parallel Notifications
+    action -> notify: Queue ban notification
+    activate notify
+    notify --> action: Queued
+    deactivate notify
+and
+    action -> audit: Log ban with justification
+    activate audit
+    audit --> action: Logged
+    deactivate audit
+end
+
+action --> controller: ActionConfirmation
+deactivate action
+
+controller --> api: ActionConfirmation
+deactivate controller
+
+api --> admin: HTTP 200 ActionConfirmation
+deactivate api
+
+note right of admin
+  User status changed to BANNED
+  - ALL bookings cancelled
+  - All auth tokens invalidated
+  - User loses platform access
+  - Action logged for audit
+end note
+
+' ============================================
+' VERIFY USER FLOW
+' ============================================
+== Verify User Flow ==
+
+admin -> api: POST /api/admin/users/:id/verify
+activate api
+
+api -> controller: VerifyUser(userId)
+activate controller
+
+controller -> repo: Update verification level
+activate repo
+repo --> controller: Verified
+deactivate repo
+
+par Parallel Notifications
+    controller -> notify: Queue verification notification
+    activate notify
+    notify --> controller: Queued
+    deactivate notify
+end
+
+controller --> api: ActionConfirmation
+deactivate controller
+
+api --> admin: HTTP 200 ActionConfirmation
+deactivate api
+
+note right of admin
+  User verification level updated
+  - User notified via email
+  - Access permissions updated
+end note
+
+@enduml

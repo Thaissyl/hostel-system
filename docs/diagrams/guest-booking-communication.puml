@@ -1,0 +1,295 @@
+@startuml Guest Booking Communication Diagrams
+!theme plain
+skinparam backgroundColor #FEFEFE
+skinparam handwritten false
+skinparam sequenceMessageAlign center
+skinparam noteBackgroundColor #FEFECE
+skinparam noteBorderColor #E0E000
+
+title Guest Booking Flow - Communication Diagrams
+
+' ============================================
+' SEARCH HOSTELS FLOW
+' ============================================
+== Search Hostels Flow ==
+
+actor Guest as guest
+participant "API Gateway" as api
+participant "SearchController" as search_ctrl
+participant "SearchQueryValidator" as validator
+participant "SearchCacheService" as cache
+participant "ListingSearchEngine" as engine
+participant "AvailabilityService" as availability
+participant "PricingService" as pricing
+participant "RelevanceScorer" as scorer
+participant "SearchAnalyticsLogger" as analytics
+
+guest -> api: POST /api/search
+activate api
+note right: SearchRequest(location, dates, guests, filters)
+
+api -> search_ctrl: Search(criteria)
+activate search_ctrl
+
+search_ctrl -> validator: Validate criteria
+activate validator
+validator --> search_ctrl: ValidationResult
+deactivate validator
+
+search_ctrl -> cache: Check cache
+activate cache
+cache --> search_ctrl: CacheMiss
+deactivate cache
+
+search_ctrl -> engine: Search listings (Elasticsearch)
+activate engine
+engine --> search_ctrl: RawResults[]
+deactivate engine
+
+search_ctrl -> availability: Batch check availability
+activate availability
+availability --> search_ctrl: AvailabilityMap
+deactivate availability
+
+search_ctrl -> pricing: Calculate prices
+activate pricing
+pricing --> search_ctrl: PriceMap
+deactivate pricing
+
+search_ctrl -> scorer: Score and sort
+activate scorer
+scorer --> search_ctrl: SortedResults[]
+deactivate scorer
+
+search_ctrl -> analytics: Log search
+activate analytics
+analytics --> search_ctrl: Logged
+deactivate analytics
+
+search_ctrl --> api: SearchResults
+deactivate search_ctrl
+
+api --> guest: HTTP 200 SearchResults
+deactivate api
+
+note right of guest
+  Returns matching accommodations
+  with availability, pricing,
+  sorted by relevance
+end note
+
+' ============================================
+' VIEW LISTING DETAILS FLOW
+' ============================================
+== View Listing Details Flow ==
+
+participant "ListingController" as list_ctrl
+participant "ListingCacheService" as list_cache
+participant "ListingService" as list_svc
+participant "ReviewService" as review
+participant "MediaService" as media
+participant "ViewCountService" as view_count
+participant "LocationService" as location
+
+guest -> api: GET /api/listings/:id
+activate api
+
+api -> list_ctrl: ViewListing(listingId)
+activate list_ctrl
+
+list_ctrl -> list_cache: Check cache
+activate list_cache
+list_cache --> list_ctrl: CacheMiss
+deactivate list_cache
+
+par Parallel Data Fetch
+    list_ctrl -> list_svc: Get listing
+    activate list_svc
+    list_svc --> list_ctrl: ListingData
+    deactivate list_svc
+and
+    list_ctrl -> review: Get reviews
+    activate review
+    review --> list_ctrl: ReviewSummary
+    deactivate review
+and
+    list_ctrl -> availability: Get calendar
+    activate availability
+    availability --> list_ctrl: AvailabilityCalendar
+    deactivate availability
+and
+    list_ctrl -> pricing: Calculate base pricing
+    activate pricing
+    pricing --> list_ctrl: PriceInfo
+    deactivate pricing
+and
+    list_ctrl -> media: Get optimized image URLs
+    activate media
+    media --> list_ctrl: MediaItem[]
+    deactivate media
+and
+    list_ctrl -> location: Get map data
+    activate location
+    location --> list_ctrl: LocationInfo
+    deactivate location
+end
+
+list_ctrl -> view_count: Increment view (async)
+activate view_count
+view_count --> list_ctrl: (async, non-blocking)
+deactivate view_count
+
+list_ctrl -> list_cache: Cache response
+activate list_cache
+deactivate list_cache
+
+list_ctrl --> api: ListingDetailView
+deactivate list_ctrl
+
+api --> guest: HTTP 200 ListingDetailView
+deactivate api
+
+note right of guest
+  Complete listing details:
+  - Photos, amenities, policies
+  - Reviews and ratings
+  - Availability calendar
+  - Pricing breakdown
+  - Location info
+end note
+
+' ============================================
+' CREATE BOOKING FLOW
+' ============================================
+== Create Booking Flow ==
+
+participant "AuthController" as auth_ctrl
+participant "BookingController" as book_ctrl
+participant "BookingService" as book_svc
+participant "BookingValidator" as book_val
+participant "ReservationLockService" as lock_svc
+participant "BookingRepository" as book_repo
+participant "SessionService" as session
+participant "GuestService" as guest_svc
+
+guest -> api: POST /api/bookings/initiate
+activate api
+note right: BookNow(listingId, dates, guests)
+
+api -> auth_ctrl: Check authentication
+activate auth_ctrl
+auth_ctrl --> api: NotAuthenticated
+deactivate auth_ctrl
+
+api --> guest: HTTP 302 Redirect to login
+deactivate api
+
+guest -> api: Authenticate (login/register)
+activate api
+
+api -> book_svc: Create booking session
+activate book_svc
+book_svc -> session: Store booking data
+activate session
+session --> book_svc: SessionId
+deactivate session
+book_svc --> api: SessionId
+deactivate book_svc
+
+api --> guest: HTTP 200 Checkout page
+deactivate api
+
+guest -> api: POST /api/bookings (confirm)
+activate api
+note right: BookingRequest(listingId, dates, guests)
+
+api -> book_ctrl: ConfirmBooking(request)
+activate book_ctrl
+
+book_ctrl -> book_val: Validate constraints
+activate book_val
+book_val --> book_ctrl: Valid
+deactivate book_val
+
+book_ctrl -> availability: Check availability
+activate availability
+availability --> book_ctrl: Available
+deactivate availability
+
+book_ctrl -> lock_svc: Acquire lock (Redis, 15min TTL)
+activate lock_svc
+lock_svc --> book_ctrl: LockAcquired (reservationId)
+deactivate lock_svc
+
+book_ctrl -> pricing: Calculate total
+activate pricing
+pricing --> book_ctrl: PriceBreakdown
+deactivate pricing
+
+book_ctrl -> book_repo: Create booking (pending_payment)
+activate book_repo
+book_repo --> book_ctrl: BookingRecord
+deactivate book_repo
+
+par Parallel Actions
+    book_ctrl -> notify: Queue notifications
+    activate notify
+    notify --> book_ctrl: Queued
+    deactivate notify
+and
+    book_ctrl -> analytics: Log booking created
+    activate analytics
+    analytics --> book_ctrl: Logged
+    deactivate analytics
+end
+
+book_ctrl -> api: Redirect to payment
+deactivate book_ctrl
+
+api --> guest: HTTP 302 Redirect to payment
+deactivate api
+
+note right of guest
+  Booking created with status:
+  PENDING_PAYMENT
+
+  Availability reserved for 15 min
+  Lock acquired on dates
+  Redirected to complete payment
+end note
+
+' ============================================
+' WEBSOCKET: REAL-TIME AVAILABILITY UPDATE
+' ============================================
+== WebSocket: Real-time Availability ==
+
+participant "WebSocket Server" as ws
+participant "Multiple Guests" as guests
+
+owner -> api: CalendarUpdate (WebSocket)
+activate api
+note right: Owner updates availability
+
+api -> availability: Update calendar
+activate availability
+availability --> api: Updated
+deactivate availability
+
+api -> ws: Broadcast to connected guests
+activate ws
+
+ws --> guests: AvailabilityUpdate (WebSocket event)
+activate guests
+guests --> ws: Acknowledgement
+deactivate guests
+deactivate ws
+
+deactivate api
+
+note right of guests
+  Real-time update received
+  while viewing listing
+  Availability calendar refreshed
+end note
+
+@enduml

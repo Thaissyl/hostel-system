@@ -1,0 +1,321 @@
+@startuml Owner Listing Management Communication Diagrams
+!theme plain
+skinparam backgroundColor #FEFEFE
+skinparam handwritten false
+skinparam sequenceMessageAlign center
+skinparam noteBackgroundColor #FEFECE
+skinparam noteBorderColor #E0E000
+
+title Owner Listing Management - Communication Diagrams
+
+' ============================================
+' VIEW LISTINGS FLOW
+' ============================================
+== View Listings Flow ==
+
+actor Owner as owner
+participant "API Gateway" as api
+participant "ListingController" as list_ctrl
+participant "ListingRepository" as list_repo
+participant "PropertyRepository" as prop_repo
+
+owner -> api: GET /api/owner/listings
+activate api
+
+api -> list_ctrl: GetMyListings()
+activate list_ctrl
+
+list_ctrl -> list_repo: Query by ownerId
+activate list_repo
+list_repo --> list_ctrl: listings[]
+deactivate list_repo
+
+list_ctrl -> prop_repo: Verify property ownership
+activate prop_repo
+prop_repo --> list_ctrl: Verified
+deactivate prop_repo
+
+list_ctrl --> api: ListingsWithStatus
+deactivate list_ctrl
+
+api --> owner: HTTP 200 ListingsWithStatus
+deactivate api
+
+note right of owner
+  Returns all listings with
+  status indicators:
+  - Draft, Pending, Active, Suspended
+end note
+
+' ============================================
+' CREATE LISTING FLOW
+' ============================================
+== Create Listing Flow ==
+
+participant "ListingValidator" as list_val
+participant "PricingService" as pricing
+participant "AmenityService" as amenity
+participant "ImageUploadService" as image
+participant "SearchIndexService" as search
+participant "AuditLogService" as audit
+participant "NotificationService" as notify
+database "RabbitMQ" as mq
+
+owner -> api: POST /api/listings
+activate api
+note right: ListingDetails(propertyId, roomType, capacity, price, amenities)
+
+api -> list_ctrl: CreateListing(listingData)
+activate list_ctrl
+
+list_ctrl -> list_val: Validate data
+activate list_val
+list_val --> list_ctrl: Valid
+deactivate list_val
+
+list_ctrl -> prop_repo: Verify property ownership
+activate prop_repo
+prop_repo --> list_ctrl: Verified
+deactivate prop_repo
+
+list_ctrl -> pricing: Check price limits
+activate pricing
+pricing --> list_ctrl: Within limits
+deactivate pricing
+
+list_ctrl -> amenity: Validate amenities
+activate amenity
+amenity --> list_ctrl: Valid
+deactivate amenity
+
+alt Images Provided
+    list_ctrl -> image: Upload images
+    activate image
+    image --> list_ctrl: imageUrls[]
+    deactivate image
+end
+
+list_ctrl -> list_repo: Create listing
+activate list_repo
+list_repo --> list_ctrl: ListingRecord
+deactivate list_repo
+
+par Async Operations
+    list_ctrl -> search: Sync to Elasticsearch
+    activate search
+    search -> mq: Publish listing.created
+    mq --> search: Queued
+    search --> list_ctrl: Indexed (async)
+    deactivate search
+and
+    list_ctrl -> audit: Log creation
+    activate audit
+    audit --> list_ctrl: Logged
+    deactivate audit
+end
+
+list_ctrl --> api: ListingResponse
+deactivate list_ctrl
+
+api --> owner: HTTP 201 ListingResponse
+deactivate api
+
+note right of owner
+  Listing created successfully
+  - Search index updated (async)
+  - Calendar initialized
+  - Audit log created
+end note
+
+' ============================================
+' UPDATE LISTING FLOW
+' ============================================
+== Update Listing Flow ==
+
+owner -> api: PUT /api/listings/:id
+activate api
+note right: UpdateListing(listingId, changes)
+
+api -> list_ctrl: UpdateListing(listingId, changes)
+activate list_ctrl
+
+list_ctrl -> list_val: Validate changes
+activate list_val
+list_val --> list_ctrl: Valid
+deactivate list_val
+
+list_ctrl -> pricing: Recheck price limits
+activate pricing
+pricing --> list_ctrl: Within limits
+deactivate pricing
+
+alt New Images
+    list_ctrl -> image: Upload new images
+    activate image
+    image --> list_ctrl: imageUrls[]
+    deactivate image
+end
+
+list_ctrl -> list_repo: Update listing
+activate list_repo
+list_repo --> list_ctrl: Updated
+deactivate list_repo
+
+par Async Operations
+    list_ctrl -> search: Update Elasticsearch
+    activate search
+    search -> mq: Publish listing.updated
+    mq --> search: Queued
+    search --> list_ctrl: Indexed (async)
+    deactivate search
+and
+    list_ctrl -> audit: Log update
+    activate audit
+    audit --> list_ctrl: Logged
+    deactivate audit
+end
+
+list_ctrl --> api: ListingResponse
+deactivate list_ctrl
+
+api --> owner: HTTP 200 ListingResponse
+deactivate api
+
+' ============================================
+' SEARCH INDEX SYNC FLOW (Background Worker)
+' ============================================
+== Search Index Sync Flow (Background) ==
+
+participant "Search Index Worker" as worker
+participant "Elasticsearch" as es
+
+mq -> worker: Consume listing.created
+activate worker
+
+worker -> search: Index in Elasticsearch
+activate search
+
+search -> es: Index document
+activate es
+alt Success
+    es --> search: Success
+    deactivate es
+    search --> worker: Success
+    deactivate search
+    worker --> mq: Ack
+else Failure
+    es --> search: Error
+    deactivate es
+    search --> worker: Failure
+    deactivate search
+
+    worker -> notify: Alert admins (index failed)
+    activate notify
+    notify --> worker: Alerted
+    deactivate notify
+
+    worker -> mq: Nack (requeue)
+end
+
+deactivate worker
+
+note right of worker
+  Background worker processes
+  search index updates:
+  - Created listings
+  - Updated listings
+  - Deleted listings
+
+  Retries on failure with
+  exponential backoff
+end note
+
+' ============================================
+' DEACTIVATE LISTING FLOW
+' ============================================
+== Deactivate Listing Flow ==
+
+owner -> api: DELETE /api/listings/:id
+activate api
+
+api -> list_ctrl: DeactivateListing(listingId)
+activate list_ctrl
+
+list_ctrl -> list_repo: Update status (inactive)
+activate list_repo
+list_repo --> list_ctrl: Deactivated
+deactivate list_repo
+
+par Async Operations
+    list_ctrl -> search: Remove from Elasticsearch
+    activate search
+    search -> mq: Publish listing.deleted
+    mq --> search: Queued
+    search --> list_ctrl: Removed (async)
+    deactivate search
+and
+    list_ctrl -> audit: Log deactivation
+    activate audit
+    audit --> list_ctrl: Logged
+    deactivate audit
+end
+
+list_ctrl -> availability: Mark all dates unavailable
+activate availability
+availability --> list_ctrl: Updated
+deactivate availability
+
+list_ctrl --> api: DeletionConfirmation
+deactivate list_ctrl
+
+api --> owner: HTTP 200 DeletionConfirmation
+deactivate api
+
+note right of owner
+  Listing deactivated:
+  - Removed from search
+  - Calendar unavailable
+  - Existing bookings preserved
+  - Can be reactivated later
+end note
+
+' ============================================
+' WEBSOCKET: REAL-TIME LISTING UPDATE
+' ============================================
+== WebSocket: Real-time Listing Update ==
+
+participant "WebSocket Server" as ws
+participant "Connected Guests" as guests
+
+owner -> api: ListingUpdate (WebSocket)
+activate api
+note right: Owner updates listing details
+
+api -> list_ctrl: Process update
+activate list_ctrl
+list_ctrl -> list_repo: Save changes
+activate list_repo
+list_repo --> list_ctrl: Saved
+deactivate list_repo
+deactivate list_ctrl
+
+api -> ws: Broadcast to guests viewing listing
+activate ws
+
+ws --> guests: ListingUpdated (WebSocket event)
+activate guests
+guests --> ws: Acknowledgement
+deactivate guests
+deactivate ws
+
+deactivate api
+
+note right of guests
+  Real-time listing update:
+  - Price changes
+  - Availability changes
+  - Amenity updates
+  Auto-refresh if viewing
+end note
+
+@enduml

@@ -1,204 +1,4 @@
-# Hostel Management System - Use Cases Documentation
-
-This document consolidates key use cases for the Hostel Management System, covering admin, guest, and owner interactions.
-
----
-
-## Table of Contents
-
-1. [UC-A02: Manage Users](#uc-a02-manage-users)
-2. [UC-G01: Search Hostels](#uc-g01-search-hostels)
-3. [UC-G02: View Listing Details](#uc-g02-view-listing-details)
-4. [UC-G03: Create Booking](#uc-g03-create-booking)
-5. [UC-O02: Manage Listings](#uc-o02-manage-listings)
-
----
-
-## UC-A02: Manage Users
-
-| Field | Description |
-|-------|-------------|
-| **Use Case Name** | Manage Users |
-| **Created By** | Product Team |
-| **Created Date** | 2026-01-25 |
-| **Last Updated By** | Product Team |
-| **Last Updated Date** | 2026-01-25 |
-| **Summary** | Admin views, searches, and manages user accounts. Can suspend/ban users, verify accounts, and view user activity. |
-| **Dependency** | None (independent admin function) |
-| **Actors** | Primary: Admin<br>Secondary: Users (affected by actions) |
-| **Preconditions** | Admin authenticated. Has user management permissions. |
-| **Trigger** | Admin navigates to "User Management" |
-| **Main Sequence** | 1. Admin navigates to "User Management"<br>2. System displays user table with search and filters<br>3. Admin searches by email, name, phone<br>4. Admin filters by role, status, verification level<br>5. Admin selects a user to view details<br>6. System displays user profile, bookings, reviews, activity log<br>7. Admin may suspend, ban, verify, or unverify user |
-| **Alternative Sequences** | Step 3: If user not found, System displays "No users found" message<br>Step 5: If user has bookings, System shows booking summary with links<br>Step 7: If suspend user, Admin must enter reason and duration<br>Step 7: If ban user, Admin must provide justification, System disables all bookings |
-| **Postconditions** | User status updated. User notified via email. Audit log created. |
-| **Nonfunctional Requirements** | Paginated user list (50 per page). Quick search < 1s. Action confirmation dialogs. Email notifications to users. |
-| **Business Requirements** | BR-027: Suspended users cannot create new bookings<br>BR-028: Banned users lose access to platform |
-| **Frequency of Use** | Medium |
-| **Priority** | High |
-| **Outstanding Questions** | Appeal process for banned users? Data retention for banned users? |
-
-### Sequence Diagram
-
-```mermaid
-flowchart TD
-    A[Admin: User Management] --> B[User Table]
-    B --> C[Search/Filter Users]
-    C --> D[Select User]
-    D --> E[View User Profile]
-
-    E --> F{Action?}
-    F --> G[Suspend]
-    F --> H[Ban]
-    F --> I[Verify]
-    F --> J[Unverify]
-
-    G --> K[Enter Reason + Duration]
-    H --> L[Enter Justification]
-    I --> M[Confirm Verification]
-    J --> N[Confirm Unverification]
-
-    K --> O[Update Status: Suspended]
-    L --> P[Update Status: Banned]
-    M --> Q[Update Status: Verified]
-    N --> R[Update Status: Unverified]
-
-    O --> S[Notify User]
-    P --> S
-    Q --> S
-    R --> S
-```
-
-### Boundary Objects
-
-| Boundary Object | Description | Data Elements |
-|----------------|-------------|---------------|
-| **UserList** | Paginated user list | users[], totalCount, page, filters |
-| **UserDetails** | Complete user profile | userId, email, name, role, status, verificationLevel, bookings[], reviews[], activityLog[] |
-| **UserAction** | Admin action on user | actionType (suspend/ban/verify/unverify), reason, duration, notes |
-| **UserSearchRequest** | Search criteria | searchTerm, filters (role, status, verificationLevel) |
-| **ActionConfirmation** | Action result | userId, newStatus, effectiveAt, expiresAt |
-
-### Internal Software Objects
-
-| Internal Object | Responsibility |
-|-----------------|---------------|
-| **UserService** | Manages user CRUD operations |
-| **UserSearchService** | Handles user search and filtering |
-| **UserActionService** | Processes suspend/ban/verify actions |
-| **BookingService** | Fetches user booking history |
-| **ReviewService** | Fetches user review history |
-| **ActivityLogService** | Retrieves user activity |
-| **NotificationService** | Sends action notifications to users |
-| **UserRepository** | Queries user data |
-| **AuditLogService** | Logs all admin actions |
-| **AuthService** | Handles auth token invalidation |
-
-### Message Communication Sequence
-
-#### View Users Flow
-```
-Admin → System: ViewUsers (HTTP GET /api/admin/users)
-    ↓
-System → UserRepository: Query users with pagination
-    ← users[]
-System → UserSearchService: Apply search/filters
-    ← filteredUsers
-System → Admin: UserList (HTTP 200)
-```
-
-#### Search Users Flow
-```
-Admin → System: SearchUsers (HTTP POST /api/admin/users/search)
-    ↓
-System → UserSearchService: Search by email/name/phone
-    ← matchingUsers
-System → Admin: UserList (HTTP 200)
-```
-
-#### Suspend User Flow
-```
-Admin → System: SuspendUser (HTTP POST /api/admin/users/:id/suspend)
-    ↓
-System → UserActionService: Process suspension
-    ↓
-System → UserRepository: Update status (suspended)
-    ← Updated
-System → BookingService: Cancel upcoming bookings
-    ← Cancelled
-System → AuthService: Invalidate all tokens
-    ← Invalidated
-System → NotificationService: Notify user
-    ← Queued
-System → AuditLogService: Log suspension with reason
-    ← Logged
-System → Admin: ActionConfirmation (HTTP 200)
-```
-
-#### Ban User Flow
-```
-Admin → System: BanUser (HTTP POST /api/admin/users/:id/ban)
-    ↓
-System → UserActionService: Process ban
-    ↓
-System → UserRepository: Update status (banned)
-    ← Updated
-System → BookingService: Cancel all bookings
-    ← Cancelled
-System → AuthService: Invalidate all tokens
-    ← Invalidated
-System → NotificationService: Notify user
-    ← Queued
-System → AuditLogService: Log ban with justification
-    ← Logged
-System → Admin: ActionConfirmation (HTTP 200)
-```
-
-#### Verify User Flow
-```
-Admin → System: VerifyUser (HTTP POST /api/admin/users/:id/verify)
-    ↓
-System → UserRepository: Update verification level
-    ← Verified
-System → NotificationService: Notify user
-    ← Queued
-System → Admin: ActionConfirmation (HTTP 200)
-```
-
-### Expanded Alternative Sequences
-
-#### Step 3: User Search Results
-| Condition | System Response | Recovery |
-|-----------|-----------------|----------|
-| No users found | "No users found" message | Suggest broader search |
-| Multiple matches | Show all matches | Refine filters |
-| Exact email match | Direct to user profile | Single result |
-| Suspended user found | Show "Suspended" badge | Action history available |
-
-#### Step 5: Action Confirmations
-| Condition | System Response | Recovery |
-|-----------|-----------------|----------|
-| Suspend - no duration | Require duration input | Minimum/max duration hints |
-| Ban - insufficient justification | Require detailed reason | Policy link provided |
-| Verify - pending flags | Show unresolved flags | Resolve before verifying |
-| Bulk action | Show affected user count | Confirm batch operation |
-
-#### Step 7: Action Failures
-| Condition | System Response | Recovery |
-|-----------|-----------------|----------|
-| Database constraint violation | Retry with fresh data | Concurrent modification handling |
-| Token invalidation failed | Log for manual cleanup | Cron job retry |
-| Booking cancellation failed | Partial success report | Manual follow-up required |
-| User already in target state | No-op with notice | "Already suspended" message |
-
-#### User State Conflicts
-| Condition | System Response | Recovery |
-|-----------|-----------------|----------|
-| Active bookings during ban | Warning: "Will cancel X bookings" | Force confirmation |
-| Pending reviews during ban | Reviews preserved | Reviews stay visible |
-| Refund due to ban | Queue refund processing | Payment gateway retry |
-| Appeal submitted | Show appeal status | Override option for admins |
-
----
+# Guest Use Cases
 
 ## UC-G01: Search Hostels
 
@@ -228,20 +28,46 @@ System → Admin: ActionConfirmation (HTTP 200)
 ```mermaid
 sequenceDiagram
     participant G as Guest
-    participant S as System
+    participant UI as Search UI
+    participant API as API Gateway
+    participant VAL as SearchQueryValidator
+    participant CACHE as SearchCacheService
+    participant ES as ListingSearchEngine
+    participant AVAIL as AvailabilityService
+    participant PRICE as PricingService
+    participant SCORE as RelevanceScorer
 
-    G->>S: Enter search criteria
-    S->>S: Validate date range
+    G->>UI: Enter search criteria
+    UI->>API: POST /api/search
+    API->>VAL: Validate criteria
 
-    alt Date Range Valid
-        S->>S: Retrieve matching accommodations
-        S->>S: Sort results by relevance
-        S-->>G: Display search results
-    else Date Range Invalid
-        S-->>G: Display error message
+    alt Invalid Date Range
+        VAL-->>API: ValidationError
+        API-->>UI: Error message
+        UI-->>G: Display error
+    else Valid
+        VAL-->>API: Valid
+        API->>CACHE: Check cache
+        CACHE-->>API: Cache miss
+        API->>ES: Search listings
+        ES-->>API: Raw results[]
+        API->>AVAIL: Batch check availability
+        AVAIL-->>API: AvailabilityMap
+        API->>PRICE: Calculate prices
+        PRICE-->>API: PriceMap
+        API->>SCORE: Score and sort
+        SCORE-->>API: SortedResults[]
+        API->>CACHE: Cache results (5min TTL)
+        API-->>UI: SearchResults
+        UI-->>G: Display results
     end
 
-    G->>S: Select listing or refine search
+    G->>UI: Refine filters
+    UI->>API: POST /api/search/filters
+    API->>ES: Refine search
+    ES-->>API: FilteredResults[]
+    API-->>UI: Updated results
+    UI-->>G: Display filtered results
 ```
 
 ### Boundary Objects
@@ -346,6 +172,8 @@ System → Guest: SuggestionItem
 | Price changed during search | Update displayed price | "Price may vary" disclaimer |
 | New listing matches criteria | Optional refresh prompt | "New listings available" toast |
 
+**Related Use Cases**: [UC-G02: View Listing Details](#uc-g02-view-listing-details) (next step in flow)
+
 ---
 
 ## UC-G02: View Listing Details
@@ -376,14 +204,50 @@ System → Guest: SuggestionItem
 ```mermaid
 sequenceDiagram
     participant G as Guest
-    participant S as System
+    participant UI as Listing UI
+    participant API as API Gateway
+    participant CACHE as ListingCacheService
+    participant LS as ListingService
+    participant RS as ReviewService
+    participant AVAIL as AvailabilityService
+    participant PS as PricingService
+    participant MS as MediaService
+    participant VCS as ViewCountService
 
-    G->>S: Click listing
-    S->>S: Retrieve listing details
-    S->>S: Retrieve reviews
-    S->>S: Retrieve availability
-    S-->>G: Display listing page
-    S->>S: Log view count
+    G->>UI: Click listing
+    UI->>API: GET /api/listings/:id
+    API->>CACHE: Check cache
+
+    alt Cache Hit
+        CACHE-->>API: Cached data
+        API-->>UI: ListingDetailView (fast)
+    else Cache Miss
+        API->>LS: Get listing
+        LS-->>API: ListingData
+        API->>RS: Get reviews
+        RS-->>API: ReviewSummary
+        API->>AVAIL: Get calendar
+        AVAIL-->>API: AvailabilityCalendar
+        API->>PS: Calculate pricing
+        PS-->>API: PriceInfo
+        API->>MS: Get image URLs
+        MS-->>API: MediaItem[]
+        API->>CACHE: Cache response (15min TTL)
+        API-->>UI: ListingDetailView
+    end
+
+    par Async Operations
+        API->>VCS: Increment view count
+        API->>CACHE: Add to recently viewed (if logged in)
+    end
+
+    UI-->>G: Display listing page
+
+    G->>UI: Load image
+    UI->>API: GET /cdn/images/:id
+    API->>MS: Serve optimized image
+    MS-->>UI: WebP image
+    UI-->>G: Display image
 ```
 
 ### Boundary Objects
@@ -488,6 +352,8 @@ Guest ← System: AvailabilityUpdate (WebSocket event)
 | Session expired | Silently fail history save | Continue viewing normally |
 | Rate limit exceeded | Cache view count locally | Batch update later |
 
+**Related Use Cases**: [UC-G01: Search Hostels](#uc-g01-search-hostels) (entry point), [UC-G03: Create Booking](#uc-g03-create-booking) (next action)
+
 ---
 
 ## UC-G03: Create Booking
@@ -518,24 +384,61 @@ Guest ← System: AvailabilityUpdate (WebSocket event)
 ```mermaid
 sequenceDiagram
     participant G as Guest
-    participant S as System
+    participant UI as Checkout UI
+    participant API as API Gateway
+    participant AUTH as AuthService
+    participant BS as BookingService
+    participant VAL as BookingValidator
+    participant AVAIL as AvailabilityService
+    participant LOCK as ReservationLockService
+    participant PRICE as PricingService
+    participant REPO as BookingRepository
+    participant NS as NotificationService
+    participant REDIS as Redis Cache
 
-    G->>S: Click "Book Now"
-    S->>S: Check authentication
+    G->>UI: Click "Book Now"
+    UI->>API: POST /api/bookings/initiate
+    API->>AUTH: Check authentication
 
     alt Not Authenticated
-        S-->>G: Prompt login/register
-        G->>S: Authenticate
+        AUTH-->>API: NotAuthenticated
+        API-->>UI: Redirect to login
+        UI-->>G: Login form
+        G->>UI: Submit credentials
+        UI->>AUTH: Authenticate
+        AUTH-->>UI: AuthToken
     end
 
-    S-->>G: Display checkout page
-    G->>S: Confirm booking details
+    UI->>API: POST /api/bookings/initiate
+    API->>BS: Create booking session
+    BS-->>API: SessionId
+    API-->>UI: Checkout page
 
-    S->>S: Validate availability
-    S->>S: Reserve availability
-    S->>S: Create booking (pending_payment)
+    G->>UI: Confirm booking details
+    UI->>API: POST /api/bookings
+    API->>VAL: Validate constraints
+    VAL-->>API: Valid
+    API->>AVAIL: Check availability
+    AVAIL-->>API: Available
+    API->>LOCK: Acquire lock (15min TTL)
+    LOCK->>REDIS: SETNX reservation:lock
+    REDIS-->>LOCK: LockAcquired
+    LOCK-->>API: reservationId
+    API->>PRICE: Calculate total
+    PRICE-->>API: PriceBreakdown
+    API->>REPO: Create booking (status: pending_payment)
+    REPO-->>API: BookingRecord
+    API->>NS: Queue notifications
+    NS-->>API: Queued
+    API-->>UI: Redirect to payment
 
-    S-->>G: Redirect to payment
+    par Cleanup (Background)
+        loop Every 5 minutes
+            REPO->>REPO: Find expired bookings
+            REPO->>LOCK: Release locks
+            REPO->>REPO: Update status to expired
+        end
+    end
 ```
 
 ### Boundary Objects
@@ -645,142 +548,8 @@ Guest(s) viewing listing ← System: AvailabilityUpdate
 | Notification queue full | Continue booking | Log for later notification |
 | Session expired | Error: "Session expired" | Restart booking flow |
 
----
-
-## UC-O02: Manage Listings
-
-| Field | Description |
-|-------|-------------|
-| **Use Case Name** | Manage Listings |
-| **Created By** | Product Team |
-| **Created Date** | 2026-01-25 |
-| **Last Updated By** | Product Team |
-| **Last Updated Date** | 2026-01-25 |
-| **Summary** | Owner creates, updates, and deactivates listings under their approved properties. Each listing has room types, pricing, and amenities. |
-| **Dependency** | UC-O01 (Register Property) |
-| **Actors** | Primary: Owner |
-| **Preconditions** | Owner authenticated. At least one approved property exists. |
-| **Trigger** | Owner navigates to "My Listings" |
-| **Main Sequence** | 1. Owner navigates to "My Listings"<br>2. System displays all listings with status indicators<br>3. Owner clicks "Add Listing" or selects existing to edit<br>4. Owner enters listing details (room type, capacity, base price, amenities)<br>5. Owner uploads listing images<br>6. Owner saves listing<br>7. System updates listing<br>8. System initializes availability calendar |
-| **Alternative Sequences** | Step 2: If no listings, System displays empty state with "Create your first listing" CTA<br>Step 4: If duplicate listing detected, System warns "Similar listing exists"<br>Step 7: If search index update fails, System queues for retry and shows warning to owner<br>Step 8: If calendar initialization fails, System logs error for manual intervention |
-| **Postconditions** | Listing created/updated. Search index updated. Calendar initialized. Audit log created. |
-| **Nonfunctional Requirements** | Max 20 images per listing. Amenities predefined list. Price validation (min/max). Search index update reliability. |
-| **Business Requirements** | BR-019: Room type must match property type<br>BR-020: Pricing must be within platform limits |
-| **Frequency of Use** | Medium |
-| **Priority** | High |
-| **Outstanding Questions** | How many listings per property? Should changes require re-approval? |
-
-### Sequence Diagram
-
-```mermaid
-flowchart TD
-    A[Owner: My Listings] --> B{Listings Exist?}
-    B -->|No| C[Empty State]
-    C --> D[Click 'Add Listing']
-    B -->|Yes| E[Display Listings]
-    E --> F[Click 'Add' or Select to Edit]
-    D --> G[Enter Listing Details]
-    F --> G
-    G --> H[Upload Images]
-    H --> I[Save Listing]
-    I --> J{Valid?}
-    J -->|No| K[Show Errors]
-    K --> G
-    J -->|Yes| L[Update Search Index]
-    L --> M[Listing Active]
-```
-
-### Boundary Objects
-
-| Boundary Object | Description | Data Elements |
-|----------------|-------------|---------------|
-| **ListingDetails** | Listing form data | propertyId, title, description, roomType, capacity, basePrice, currency, amenities[] |
-| **ListingResponse** | Created/updated listing | listingId, status, searchIndexStatus, updatedAt |
-| **ListingImage** | Listing media | imageId, url, order, caption |
-| **AmenityItem** | Amenity selection | amenityId, name, category |
-| **PriceValidation** | Price constraint check | minPrice, maxPrice, platformLimits |
-
-### Internal Software Objects
-
-| Internal Object | Responsibility |
-|-----------------|---------------|
-| **ListingService** | Manages listing CRUD operations |
-| **ListingValidator** | Validates listing constraints |
-| **PricingService** | Validates and enforces price limits |
-| **AmenityService** | Manages available amenities |
-| **ImageUploadService** | Handles listing image uploads |
-| **SearchIndexService** | Syncs listings to Elasticsearch |
-| **ListingRepository** | Persists listing records |
-| **PropertyRepository** | Verifies property ownership |
-| **NotificationService** | Notifies of search index issues |
-| **AuditLogService** | Logs listing changes |
-
-### Message Communication Sequence
-
-#### Create/Update Listing Flow
-```
-Owner → System: CreateListing (HTTP POST /api/listings)
-    ↓
-System → ListingValidator: Validate data
-    ← Valid
-System → PropertyRepository: Verify property ownership
-    ← Verified
-System → PricingService: Check price limits
-    ← Within limits
-System → ImageUploadService: Upload images
-    ← imageUrls[]
-System → ListingRepository: Create listing
-    ← ListingRecord
-System → SearchIndexService: Sync to Elasticsearch
-    ← Indexed
-System → AuditLogService: Log creation
-    ← Logged
-System → Owner: ListingResponse (HTTP 201)
-```
-
-#### Search Index Sync Flow
-```
-System → RabbitMQ: Publish listing.created
-    ↓
-Search Index Worker → SearchIndexService: Index in Elasticsearch
-    ← Success (or Failure)
-    ↓
-If Failure → NotificationService: Alert admins
-    ← Alerted
-```
-
-### Expanded Alternative Sequences
-
-#### Step 4: Duplicate Detection
-| Condition | System Response | Recovery |
-|-----------|-----------------|----------|
-| Same room type + property | Warning: "Similar listing exists" | Allow with confirmation |
-| Same capacity + price range | Warning: "May duplicate existing" | Show existing listing |
-| Different property | No warning | Continue normally |
-
-#### Step 7: Search Index Failures
-| Condition | System Response | Recovery |
-|-----------|-----------------|----------|
-| Elasticsearch down | Queue for retry | Listing created, "Pending search" badge |
-| Index timeout | Retry in background | Notify when indexed |
-| Partial success | Warning: "Some fields not searchable" | Re-sync available |
-| Connection lost | Queue in RabbitMQ | Worker will retry |
-
-#### Step 8: Calendar Initialization
-| Condition | System Response | Recovery |
-|-----------|-----------------|----------|
-| Date range invalid | Error: "Invalid date range" | Prompt for valid dates |
-| Database constraint | Log error, manual fix | Flag for admin review |
-| Async init succeeded | Silent success | Calendar ready |
-| Init timeout | Background retry | Notify when ready |
+**Related Use Cases**: [UC-G02: View Listing Details](#uc-g02-view-listing-details) (entry point), [UC-A02: Manage Users](./admin-use-cases.md#uc-a02-manage-users) (user status impacts)
 
 ---
 
-## Document Information
-
-- **Document Version**: 1.0
-- **Last Updated**: 2026-01-29
-- **Author**: Product Team
-- **Status**: Consolidated Use Cases Documentation
-
-This document provides a comprehensive overview of the core use cases for the Hostel Management System. Each use case includes detailed sequence diagrams, boundary objects, internal software objects, message communication sequences, and expanded alternative sequences to support full implementation and testing.
+[← Back to Use Cases Index](./index.md)
