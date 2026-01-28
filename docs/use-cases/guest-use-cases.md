@@ -136,6 +136,66 @@ System → AvailabilityService: Check nearby availability
 System → Guest: SuggestionItem
 ```
 
+### Communication Sequence Diagram
+
+**Scenario**: Guest successfully searches for available hostels
+
+```mermaid
+graph LR
+    Guest((Guest))
+    Search[": SearchInteraction"]
+    Control[": SearchControl"]
+    Validator[": SearchValidator"]
+    Ranker[": SearchRanker"]
+    Availability[": AvailabilityService"]
+    Listing[": Listing"]
+    Calendar[": Calendar"]
+    Property[": Property"]
+
+    Guest -->|1: Enter Search Criteria| Search
+    Search -->|1.1: Search Criteria| Control
+    Control -->|1.2: Validate Criteria| Validator
+    Validator -->|1.3: Valid| Control
+
+    Control -->|2: Search Listings| Listing
+    Listing -->|2.1: Matching Listings| Control
+
+    Control -->|3: Check Availability| Availability
+    Availability -->|3.1: Calendar| Calendar
+    Calendar -->|3.2: Available Dates| Availability
+    Availability -->|3.3: Availability Data| Control
+
+    Control -->|4: Filter by Location| Property
+    Property -->|4.1: Location Match| Control
+
+    Control -->|5: Rank Results| Ranker
+    Ranker -->|5.1: Sorted Results| Control
+
+    Control -->|6: Display Results| Search
+    Search -->|6.1: Show Search Results| Guest
+```
+
+**Message Flow Description**
+
+| Seq# | From | To | Message | Description | Condition |
+|------|------|-----|---------|-------------|-----------|
+| 1 | Guest | SearchInteraction | Enter Search Criteria | Guest enters location, dates, guest count | - |
+| 1.1 | SearchInteraction | SearchControl | Search Criteria | Interface forwards search criteria | - |
+| 1.2 | SearchControl | SearchValidator | Validate Criteria | Validate date range, location format | - |
+| 1.3 | SearchValidator | SearchControl | Valid | Criteria validation passed | [Valid] |
+| 2 | SearchControl | Listing | Search Listings | Query listings by search criteria | - |
+| 2.1 | Listing | SearchControl | Matching Listings | Return matching accommodation listings | - |
+| 3 | SearchControl | AvailabilityService | Check Availability | Verify availability for date range | - |
+| 3.1 | AvailabilityService | Calendar | Query Dates | Check calendar for available dates | - |
+| 3.2 | Calendar | AvailabilityService | Available Dates | Return availability status | - |
+| 3.3 | AvailabilityService | SearchControl | Availability Data | Filtered availability results | - |
+| 4 | SearchControl | Property | Filter by Location | Apply Vietnam location filter | - |
+| 4.1 | Property | SearchControl | Location Match | Properties in specified location | - |
+| 5 | SearchControl | SearchRanker | Rank Results | Sort by relevance and availability | - |
+| 5.1 | SearchRanker | SearchControl | Sorted Results | Ranked listing results | - |
+| 6 | SearchControl | SearchInteraction | Display Results | Send paginated results to display | - |
+| 6.1 | SearchInteraction | Guest | Show Search Results | Display search results with filters | - |
+
 ### Expanded Alternative Sequences
 
 #### Step 2: Date Range Validation
@@ -317,6 +377,76 @@ System → AvailabilityService: Update calendar
 System → WebSocket: Broadcast to connected guests viewing listing
 Guest ← System: AvailabilityUpdate (WebSocket event)
 ```
+
+### Communication Sequence Diagram
+
+**Scenario**: Guest successfully views listing details
+
+```mermaid
+graph LR
+    Guest((Guest))
+    ListingInt[": ListingInteraction"]
+    Control[": ListingViewControl"]
+    Validator[": ListingAccessValidator"]
+    Tracker[": ViewTracker"]
+    ImageOpt[": ImageOptimizer"]
+    Listing[": Listing"]
+    Review[": Review"]
+    Calendar[": Calendar"]
+    Image[": Image"]
+    Property[": Property"]
+
+    Guest -->|1: Click Listing| ListingInt
+    ListingInt -->|1.1: Listing Request| Control
+    Control -->|1.2: Validate Access| Validator
+    Validator -->|1.3: Approved| Control
+
+    Control -->|2: Get Listing Details| Listing
+    Listing -->|2.1: Listing Data| Control
+
+    Control -->|3: Get Reviews| Review
+    Review -->|3.1: Review Data| Control
+
+    Control -->|4: Get Availability| Calendar
+    Calendar -->|4.1: Available Dates| Control
+
+    Control -->|5: Get Images| Image
+    Image -->|5.1: Image URLs| ImageOpt
+    ImageOpt -->|5.2: Optimized URLs| Control
+
+    Control -->|6: Get Property Info| Property
+    Property -->|6.1: Property Data| Control
+
+    Control -->|7: Track View| Tracker
+    Tracker -->|7.1: View Logged| Control
+
+    Control -->|8: Display Page| ListingInt
+    ListingInt -->|8.1: Show Listing Page| Guest
+```
+
+**Message Flow Description**
+
+| Seq# | From | To | Message | Description | Condition |
+|------|------|-----|---------|-------------|-----------|
+| 1 | Guest | ListingInteraction | Click Listing | Guest clicks listing from search results | - |
+| 1.1 | ListingInteraction | ListingViewControl | Listing Request | Request listing details page | - |
+| 1.2 | ListingViewControl | ListingAccessValidator | Validate Access | Check if listing exists and approved | - |
+| 1.3 | ListingAccessValidator | ListingViewControl | Approved | Listing accessible | [Approved] |
+| 2 | ListingViewControl | Listing | Get Listing Details | Retrieve listing information | - |
+| 2.1 | Listing | ListingViewControl | Listing Data | Title, description, room type, capacity | - |
+| 3 | ListingViewControl | Review | Get Reviews | Fetch reviews and ratings | - |
+| 3.1 | Review | ListingViewControl | Review Data | Review list with ratings | - |
+| 4 | ListingViewControl | Calendar | Get Availability | Check available dates | - |
+| 4.1 | Calendar | ListingViewControl | Available Dates | Calendar availability status | - |
+| 5 | ListingViewControl | Image | Get Images | Fetch listing photos | - |
+| 5.1 | Image | ImageOptimizer | Image URLs | Raw image URLs | - |
+| 5.2 | ImageOptimizer | ListingViewControl | Optimized URLs | CDN-optimized URLs (WebP) | - |
+| 6 | ListingViewControl | Property | Get Property Info | Get property details | - |
+| 6.1 | Property | ListingViewControl | Property Data | Property name, location | - |
+| 7 | ListingViewControl | ViewTracker | Track View | Increment view count | - |
+| 7.1 | ViewTracker | ListingViewControl | View Logged | View count incremented | - |
+| 8 | ListingViewControl | ListingInteraction | Display Page | Send all listing data | - |
+| 8.1 | ListingInteraction | Guest | Show Listing Page | Display complete listing page | - |
 
 ### Expanded Alternative Sequences
 
@@ -513,6 +643,89 @@ System → BookingRepository: Update status (expired)
 System → WebSocket: Broadcast booking.created event
 Guest(s) viewing listing ← System: AvailabilityUpdate
 ```
+
+### Communication Sequence Diagram
+
+**Scenario**: Guest successfully creates booking
+
+```mermaid
+graph LR
+    Guest((Guest))
+    BookingInt[": BookingInteraction"]
+    Control[": BookingCreationControl"]
+    Validator[": AvailabilityValidator"]
+    Calculator[": PriceCalculator"]
+    Reservation[": ReservationManager"]
+    Factory[": BookingFactory"]
+    User[": User"]
+    Listing[": Listing"]
+    Calendar[": Calendar"]
+    Booking[": Booking"]
+
+    Guest -->|1: Click Book Now| BookingInt
+    BookingInt -->|1.1: Book Request| Control
+    Control -->|1.2: Check Auth| User
+    User -->|1.3: Authenticated| Control
+
+    Control -->|2: Validate Availability| Validator
+    Validator -->|2.1: Check Dates| Calendar
+    Calendar -->|2.2: Available| Validator
+    Validator -->|2.3: Valid| Control
+
+    Control -->|3: Calculate Price| Calculator
+    Calculator -->|3.1: Get Base Rate| Listing
+    Listing -->|3.2: Rate Data| Calculator
+    Calculator -->|3.3: Price Breakdown| Control
+
+    Control -->|4: Display Price| BookingInt
+    BookingInt -->|4.1: Show Price Breakdown| Guest
+    Guest -->|5: Confirm Booking| BookingInt
+    BookingInt -->|5.1: Booking Confirmed| Control
+
+    Control -->|6: Reserve Dates| Reservation
+    Reservation -->|6.1: Reserve| Calendar
+    Calendar -->|6.2: Reserved| Reservation
+    Reservation -->|6.3: Reservation Confirmed| Control
+
+    Control -->|7: Create Booking| Factory
+    Factory -->|7.1: Save Booking| Booking
+    Booking -->|7.2: Booking Created| Factory
+    Factory -->|7.3: Pending Payment| Control
+
+    Control -->|8: Redirect to Payment| BookingInt
+    BookingInt -->|8.1: Show Payment Page| Guest
+```
+
+**Message Flow Description**
+
+| Seq# | From | To | Message | Description | Condition |
+|------|------|-----|---------|-------------|-----------|
+| 1 | Guest | BookingInteraction | Click Book Now | Guest clicks "Book Now" from listing | - |
+| 1.1 | BookingInteraction | BookingCreationControl | Book Request | Initiate booking flow | - |
+| 1.2 | BookingCreationControl | User | Check Auth | Verify guest authentication | - |
+| 1.3 | User | BookingCreationControl | Authenticated | Guest logged in | [Authenticated] |
+| 2 | BookingCreationControl | AvailabilityValidator | Validate Availability | Check dates and capacity | - |
+| 2.1 | AvailabilityValidator | Calendar | Check Dates | Query availability for date range | - |
+| 2.2 | Calendar | AvailabilityValidator | Available | Dates available | [Available] |
+| 2.3 | AvailabilityValidator | BookingCreationControl | Valid | Availability validated | - |
+| 3 | BookingCreationControl | PriceCalculator | Calculate Price | Compute total with fees/taxes | - |
+| 3.1 | PriceCalculator | Listing | Get Base Rate | Fetch nightly rate | - |
+| 3.2 | Listing | PriceCalculator | Rate Data | Base price per night | - |
+| 3.3 | PriceCalculator | BookingCreationControl | Price Breakdown | Base + fees + taxes | - |
+| 4 | BookingCreationControl | BookingInteraction | Display Price | Show price breakdown | - |
+| 4.1 | BookingInteraction | Guest | Show Price Breakdown | Display price to guest | - |
+| 5 | Guest | BookingInteraction | Confirm Booking | Guest confirms booking details | - |
+| 5.1 | BookingInteraction | BookingCreationControl | Booking Confirmed | Guest confirmed | - |
+| 6 | BookingCreationControl | ReservationManager | Reserve Dates | Reserve availability | - |
+| 6.1 | ReservationManager | Calendar | Reserve | Lock dates for booking | - |
+| 6.2 | Calendar | ReservationManager | Reserved | Dates reserved | - |
+| 6.3 | ReservationManager | BookingCreationControl | Reservation Confirmed | 15-minute reservation active | - |
+| 7 | BookingCreationControl | BookingFactory | Create Booking | Create booking record | - |
+| 7.1 | BookingFactory | Booking | Save Booking | Persist booking data | - |
+| 7.2 | Booking | BookingFactory | Booking Created | Booking saved with pending_payment | - |
+| 7.3 | BookingFactory | BookingCreationControl | Pending Payment | Booking created successfully | - |
+| 8 | BookingCreationControl | BookingInteraction | Redirect to Payment | Forward to payment flow | - |
+| 8.1 | BookingInteraction | Guest | Show Payment Page | Display payment options | - |
 
 ### Expanded Alternative Sequences
 
